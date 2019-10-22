@@ -7,112 +7,140 @@
 #include <map>
 #include <cstdint> // for std::int_least16_t
 
-template<typename Name_t, typename A_t, typename B_t>
+template<typename N, typename A, typename B>
+class Rule {
+public:
+    N name;
+    bool (*predicate)(A,B);
+    Rule(const N newName, bool (*pred)(A,B))
+	: name(newName), predicate(pred)
+	{}
+    Rule(const Rule<N,A,B> &other)
+    {
+	name = other.name;
+	predicate = other.predicate;
+    }
+    bool matches(A a, B b)
+    {
+	return predicate(a,b);
+    }
+};
+
+template<typename N, typename A, typename B>
 class Fact {
 public:
-  Name_t name;
-  A_t a;
-  B_t b;
-  Fact(const Name_t newName, const A_t newA, const B_t newB)
-    : name(newName), a(newA), b(newB)
-  {}
-  Fact(const Fact &other)
-  {
-    name = other.name;
-    a = other.a;
-    b = other.b;
-  }
-  bool bMatches(A_t someA) const
-  {
-    return a == someA;
-  }
-  bool aMatches(B_t someB) const
-  {
-    return b == someB;
-  }
+    N name;
+    A a;
+    B b;
+    Fact(const N newName, const A newA, const B newB)
+	: name(newName), a(newA), b(newB)
+	{}
+    Fact(const Fact<N,A,B> &other)
+    {
+	name = other.name;
+	a = other.a;
+	b = other.b;
+    }
 };
 
 
-template<typename Name_t, typename A_t, typename B_t>
+template<typename N, typename A, typename B>
 class LogicMachine {
 private:
-  using Fact_t = Fact<Name_t,A_t,B_t>;
-  std::map<Name_t,std::vector<Fact_t>> m_facts;
-  void findFact(std::vector<Fact_t> &candidates, const Name_t factName)
-  {
-    if(m_facts.find(factName) == m_facts.end()) {
-      // If key doesn't exist, fact can't be found
-      return;
+    using Fact_t = Fact<N,A,B>;
+    using Rule_t = Rule<N,A,B>;
+    std::map<N,std::vector<Fact_t>> m_facts;
+    std::map<N,std::vector<Rule_t>> m_rules;
+
+    void getCandidates(std::vector<Fact_t> &candidates, const N factName)
+    {
+	if(m_facts.find(factName) == m_facts.end()) {
+	    // If key doesn't exist, fact can't be found
+	    return;
+	}
+	for(auto &rule : m_facts[factName]) {
+	    candidates.push_back(rule);
+	}
     }
-    for(auto &each : m_facts[factName]) {
-      candidates.push_back(each);
+    void getCandidates(std::vector<Rule_t> &candidates, const N ruleName)
+    {
+	if(m_rules.find(ruleName) == m_rules.end()) {
+	    // If key doesn't exist, rule can't be found
+	    return;
+	}
+	for(auto &rule : m_rules[ruleName]) {
+	    candidates.push_back(rule);
+	}
     }
-  }
 public:
-  LogicMachine() {}
-  void addFact(const Name_t factName, const A_t aValue, const B_t bValue)
-  {
-    m_facts[factName].push_back(Fact_t(factName, aValue, bValue));
-  }
-  
-  auto findA(const Name_t factName, const B_t b)
-  {
-    std::vector<Fact_t> candidates;
-    std::vector<A_t> solutions;
-    findFact(candidates, factName);
-
-    for(auto &fact : candidates) {
-      if(fact.aMatches(b)) {
-	solutions.push_back(fact.a);
-      }
+    LogicMachine() {}
+    void add(const N factName, const A aValue, const B bValue)
+    {
+	m_facts[factName].push_back(Fact_t(factName, aValue, bValue));
     }
-    return solutions;
-  }
-  
-  auto findB(const Name_t factName, const A_t a)
-  {
-    std::vector<Fact_t> candidates;
-    std::vector<B_t> solutions;
-    findFact(candidates, factName);
 
-    for(auto &fact : candidates) {
-      if(fact.bMatches(a)) {
-	solutions.push_back(fact.b);
-      }
+    void add(const N ruleName, bool(*pred)(A,B))
+    {
+	m_rules[ruleName].push_back(Rule_t(ruleName, pred));
     }
-    return solutions;
-  }
+
+    bool isTrue(const N factName, const A a, const B b)
+    {
+	// First, try to find a fact that confirms name (A,B) is a
+	// valid relation
+	{
+	    std::vector<Fact_t> candidates;
+	    getCandidates(candidates, factName);
+	    for(auto &fact : candidates) {
+		if(fact.a == a && fact.b == b) {
+		    return true;
+		}
+	    }
+	}
+
+	// If no fact found, try to find a rule that confirms name(A,B) is
+	// a valid relation
+	std::vector<Rule_t> candidates;
+	getCandidates(candidates, factName);
+	for(auto &rule : candidates) {
+	    if(rule.matches(a,b)) {
+		return true;
+	    }
+	}
+	return false;
+    }
+    
 };
 
 
 enum class FactName : std::int_least16_t {
-	Orbits,
-	Fact_Max
+    Orbits,
+    InSolarSystem
 };
 
 enum class Planet : std::int_least16_t {
-	Mercury,
-	Venus,
-	Earth,
-	Mars,
-	Planet_Max
+    Mercury,
+    Venus,
+    Earth,
+    Mars
 };
 
 enum class Star : std::int_least16_t {
-        Sun
+    Sun,
+    AlphaCentauri
 };
 
 int main()
 {
-  LogicMachine<FactName,Planet,Star> db;
-  db.addFact(FactName::Orbits, Planet::Mercury, Star::Sun);
-  db.addFact(FactName::Orbits, Planet::Venus, Star::Sun);
-  db.addFact(FactName::Orbits, Planet::Earth, Star::Sun);
+  LogicMachine<FactName, Planet, Star> db;
 
-  auto sols = db.findA(FactName::Orbits, Star::Sun);
-  for(auto &solution : sols) {
-    std::cout << static_cast<int>(solution) << '\n';
-  }
-  std::cout << '\n' << static_cast<int>(Planet::Mars) << '\n';
+  //Intiial Facts
+  db.add(FactName::Orbits, Planet::Mercury, Star::Sun);
+  db.add(FactName::Orbits, Planet::Venus, Star::Sun);
+  db.add(FactName::Orbits, Planet::Earth, Star::Sun);
+
+  std::cout << db.isTrue(FactName::Orbits, Planet::Earth, Star::AlphaCentauri) << '\n';
+
+  
   return 0;
 }
