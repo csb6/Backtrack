@@ -5,110 +5,129 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <type_traits> // for std::is_same
 #include <cstdint> // for std::int_least16_t
+#include <array>
 
 template<typename N, typename A, typename B>
-class Rule {
+class Truth {
 public:
-    N name;
+    virtual N name() = 0;
+    virtual bool trueGiven(A a, B b) = 0;
+    virtual ~Truth() {};
+};
+
+template<typename N, typename A, typename B>
+class Rule : public Truth<N,A,B> {
+private:
+    N m_name;
     bool (*predicate)(A,B);
-    Rule(const N newName, bool (*pred)(A,B))
-	: name(newName), predicate(pred)
-	{}
-    Rule(const Rule<N,A,B> &other)
+public:
+    Rule(const N name, bool (*pred)(A,B))
+	: m_name(name), predicate(pred)
+    {}
+
+    virtual N name() override
     {
-	name = other.name;
-	predicate = other.predicate;
+	return m_name;
     }
-    bool matches(A a, B b)
+
+    virtual bool trueGiven(A a, B b) override
     {
 	return predicate(a,b);
     }
 };
 
 template<typename N, typename A, typename B>
-class Fact {
+class Fact : public Truth<N,A,B> {
+private:
+    N m_name;
+    A m_a;
+    B m_b;
 public:
-    N name;
-    A a;
-    B b;
-    Fact(const N newName, const A newA, const B newB)
-	: name(newName), a(newA), b(newB)
-	{}
-    Fact(const Fact<N,A,B> &other)
+    Fact(const N name, const A a, const B b)
+	: m_name(name), m_a(a), m_b(b)
+    {}
+
+    virtual N name() override
     {
-	name = other.name;
-	a = other.a;
-	b = other.b;
+	return m_name;
+    }
+
+    virtual bool trueGiven(A a, B b) override
+    {
+	return m_a == a && m_b == b;
     }
 };
 
 
 template<typename N, typename A, typename B>
 class LogicMachine {
+    static_assert(!std::is_same<N,A>::value, "Name type must differ from A type");
+    static_assert(!std::is_same<N,B>::value, "Name type must differ from B type");
 private:
+    using Truth_t = Truth<N,A,B>;
     using Fact_t = Fact<N,A,B>;
     using Rule_t = Rule<N,A,B>;
-    std::map<N,std::vector<Fact_t>> m_facts;
-    std::map<N,std::vector<Rule_t>> m_rules;
+    std::map<N,std::vector<Truth_t*>> m_truths;
+    unsigned int m_candidate_index = 0;
 
-    void getCandidates(std::vector<Fact_t> &candidates, const N factName)
+    Truth_t* getCandidates(const N truthName)
     {
-	if(m_facts.find(factName) == m_facts.end()) {
+	if(m_truths.find(truthName) == m_truths.end()) {
 	    // If key doesn't exist, fact can't be found
-	    return;
+	    return nullptr;
 	}
-	for(auto &rule : m_facts[factName]) {
-	    candidates.push_back(rule);
+	for(auto i=m_candidate_index; i<m_truths.size(); ++i) {
+	    Truth_t* truth = m_truths[truthName][i];
+	    if(truth != nullptr && truth->name() == truthName) {
+		m_candidate_index = i + 1;
+		return truth;
+	    }
 	}
-    }
-    void getCandidates(std::vector<Rule_t> &candidates, const N ruleName)
-    {
-	if(m_rules.find(ruleName) == m_rules.end()) {
-	    // If key doesn't exist, rule can't be found
-	    return;
-	}
-	for(auto &rule : m_rules[ruleName]) {
-	    candidates.push_back(rule);
-	}
+	return nullptr;
     }
 public:
-    LogicMachine() {}
+    ~LogicMachine()
+    {
+	for(auto &pair : m_truths) {
+	    for(auto *truth : pair.second) {
+		delete truth;
+	    }
+	}
+    }
+    
     void add(const N factName, const A aValue, const B bValue)
     {
-	m_facts[factName].push_back(Fact_t(factName, aValue, bValue));
+	m_truths[factName].push_back(new Fact_t(factName, aValue, bValue));
     }
 
     void add(const N ruleName, bool(*pred)(A,B))
     {
-	m_rules[ruleName].push_back(Rule_t(ruleName, pred));
+	m_truths[ruleName].push_back(new Rule_t(ruleName, pred));
     }
 
-    bool isTrue(const N factName, const A a, const B b)
+    bool isTrue(const N truthName, const A a, const B b)
     {
-	// First, try to find a fact that confirms name (A,B) is a
-	// valid relation
-	{
-	    std::vector<Fact_t> candidates;
-	    getCandidates(candidates, factName);
-	    for(auto &fact : candidates) {
-		if(fact.a == a && fact.b == b) {
-		    return true;
-		}
-	    }
-	}
-
-	// If no fact found, try to find a rule that confirms name(A,B) is
-	// a valid relation
-	std::vector<Rule_t> candidates;
-	getCandidates(candidates, factName);
-	for(auto &rule : candidates) {
-	    if(rule.matches(a,b)) {
+	Truth_t* truth = nullptr;
+	while((truth = getCandidates(truthName)) != nullptr) {
+	    if(truth->trueGiven(a, b)) {
 		return true;
 	    }
 	}
 	return false;
     }
+
+    /*bool bExistsForA(const N truthName, const A a)
+    {
+	Truth_t* truth = nullptr;
+	while((truth = getCandidates(truthName)) != nullptr) {
+	    if(truth->trueGiven(a)) {
+		return true;
+	    }
+	}
+	return false;
+	}*/
     
 };
 
@@ -132,15 +151,14 @@ enum class Star : std::int_least16_t {
 
 int main()
 {
-  LogicMachine<FactName, Planet, Star> db;
+    LogicMachine<FactName, Planet, Star> db;
 
-  //Intiial Facts
-  db.add(FactName::Orbits, Planet::Mercury, Star::Sun);
-  db.add(FactName::Orbits, Planet::Venus, Star::Sun);
-  db.add(FactName::Orbits, Planet::Earth, Star::Sun);
+    //Intiial Facts
+    db.add(FactName::Orbits, Planet::Mercury, Star::Sun);
+    db.add(FactName::Orbits, Planet::Venus, Star::Sun);
+    db.add(FactName::Orbits, Planet::Earth, Star::Sun);
 
-  std::cout << db.isTrue(FactName::Orbits, Planet::Earth, Star::AlphaCentauri) << '\n';
+    std::cout << db.isTrue(FactName::Orbits, Planet::Earth, Star::AlphaCentauri) << '\n';
 
-  
-  return 0;
+    return 0;
 }

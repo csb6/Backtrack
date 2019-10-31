@@ -1,0 +1,89 @@
+F(3).
+F(78).
+G(3).
+U(8,6).
+Y(7,6).
+
+B(x) :- F(x), G(x).
+
+W(x) :- F(x), B(x).
+
+Z(x) :- U(8,x), Y(7,x).
+
+?- B(3). (1) true
+
+?- B(78). (2) false
+
+?- B(5). (3) false
+
+?- W(3). (4) true
+
+means
+
+(F(x) and G(x)) -> B(x)
+= !(F(x) and G(x)) or B(x)
+= !F(x) or !G(x) or B(x) [This is a Horne clause because it has at most 1 unnegated part]
+
+(F(x) and B(x)) -> W(x)
+= !(F(x) and B(x)) or W(x)
+= !F(x) or !B(x) or W(x)
+
+(U(8,x) and Y(7,x)) -> Z(x)
+= !(U(8,x) and Y(7,x)) or Z(x)
+= !U(8,x) or !Y(7,x) or Z(x)
+
+So knowledge base looks like:
+F(3)
+F(78)
+G(3)
+!F(x) or !G(x) or B(x)
+!F(x) or !B(x) or W(x)
+
+
+How to solve?
+
+(1) B(3)
+	1. Look for facts with name B accepting 3 as arg (Failure)
+	2. Look for rules with name B accepting 3 as arg (Success, found B(x))
+	3. Substitute 3 into the rule, getting !F(3) or !G(3) or B(3)
+	4. Look at the first predicate in this new fact, !F(3).
+		-We know that F(3) is true, so !F(3) is false
+	5. Look at the second predicate in the Horne clause, !G(3).
+		-We know G(3) is true, so !G(3) is false.
+	6. Therefore, B(3) is true, so print true to user.
+
+(2) B(78)
+	1. Look for facts with name B accepting 78 as arg (Failure)
+	2. Look for rules with name B accepting 78 as arg (Success, found B(x))
+	3. Substitute 3 into the rule, getting !F(78) or !G(78) or B(78)
+	4. Look at first predicate in this new fact, !F(78).
+		-We know that F(78) is true, so !F(78) is false.
+	5. Look at second predicate in Horne clause, !G(78).
+		-Look for G(78) fact (Failure)
+		-Look for G(X) predicate that will accept 78 (Failure)
+		-Can't establish truth, so !G(78) is failed
+	6. Therefore, since we can't establish which term(s) are true in !G(78) or B(78),
+	   B(78) will be considered false, so print false to user.
+
+(3) B(5)
+	1. Look for facts with name B accepting 5 as arg (Failure)
+	2. Look for rules with name B accepting 5 as arg (Success, found B(x))
+	3. Substitute 3 into the rule, getting !F(5) or !G(5) or B(5)
+	4. Look at the first predicate in this new fact, !F(5).
+		-Look for F(5) fact (Failure)
+		-Look for GfX) predicate that will accept 5 (Failure)
+		-Can't establish truth, so !F(5) is failed
+	6. Therefore, since truth of clause can't be established, consider B(5) as false.
+
+(4) W(3)
+	1. Look for facts with name W accepting 3 as arg (Failure)
+	2. Look for rules with name W accepting 3 as arg (Success, found B(3))
+	3. Substitute 3 into the rule, getting !F(3) or !B(3) or W(3)
+	4. Look at !F(3)
+		-F(3) is known as true, so !F(3) is false. Continue.
+	5. Look at !B(3)
+		-Look for fact B(3) (Fail)
+		-Look for rule B(x) accepting 3 (success)
+		-Plug it in, solve !F(3) or !G(3) or B(3) (Success)
+		-B(3) is known as true, so !B(3) is false. Continue.
+	6. Therefore, W(3) must be true to satisfy the rule. Print true out to the user.
