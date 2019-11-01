@@ -16,7 +16,7 @@ enum class Star {
 
 int main()
 {
-    LogicMachine<FactName, Planet, Star> db;
+    Database<FactName, Planet, Star> db;
 
     //Initial Facts
     db.add(FactName::Orbits, new Fact<Planet,Star>("ab", Planet::Mercury, Star::Sun));

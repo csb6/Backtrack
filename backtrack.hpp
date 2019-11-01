@@ -2,16 +2,16 @@
 #define BACKTRACK_LIB_H
 /* Author: Cole Blakley
    File: backtrack.hpp
-   Purpose: The program is a sort of Prolog within C++. You create a Logic
-     Machine with three type parameters: The type for the names of facts and
+   Purpose: The program is a sort of Prolog within C++. You create a Database
+     with three type parameters: The type for the names of facts and
      predicates (usually an enum class or string), and two other types, A and
      B, representing the two types of data that can be logically-related within
-     facts/predicates. To get started, instantiate a LogicMachine<> with
+     facts/predicates. To get started, instantiate a Database<> with
      these 3 types, in order, parameterized in the type.
 
      Facts are in form `factname(decoder, val1, val2, ...)`, where val1 and
      val2 are of type A or type B. Facts represent a concrete association
-     between 2 values, a and b. To add a Fact to a LogicMachine instance, do
+     between 2 values, a and b. To add a Fact to a Database instance, do
      `lm.add(factName, new Fact<A,B>(aVal, bVal))`.
 
      Rules are essentially function objects that can take in variable numbers
@@ -119,7 +119,7 @@ public:
 };
 
 template<typename N, typename A, typename B>
-class LogicMachine {
+class Database {
     static_assert(!std::is_same<N,A>::value, "Name type must differ from A type");
     static_assert(!std::is_same<N,B>::value, "Name type must differ from B type");
 private:
@@ -135,7 +135,7 @@ private:
 	return m_truths[truthName][index];
     }
 public:
-    ~LogicMachine()
+    ~Database()
     {
 	for(auto &pair : m_truths) {
 	    for(auto *truth : pair.second) {

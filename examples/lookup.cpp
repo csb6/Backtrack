@@ -28,7 +28,7 @@ enum class Name {
 
 int main()
 {
-    LogicMachine<Name, int, int> db;
+    Database<Name, int, int> db;
 
     //Facts
     db.add(Name::F, new Fact<int,int>("a", 3));

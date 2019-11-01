@@ -90,12 +90,12 @@ How to solve?
 
 How to implement simple operations (1-4) in C++?
 
-    LogicMachine db;
+    Database db;
 
     db.add(N ruleName, int predicateCount, ...)
 
 Ex:
-    LogicMachine<std::string,int,int> db;
+    Database<std::string,int,int> db;
     db.add("B", 2, functionPtrForF, functionPtrForG);
 
 Need to figure out:
