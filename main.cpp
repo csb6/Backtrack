@@ -1,5 +1,6 @@
 #include "backtrack.hpp"
 #include <iostream>
+#include <cstdint> // for std::int_least16_t
 
 enum class FactName : std::int_least16_t {
     Orbits, InSolarSystem, Truth
@@ -17,7 +18,7 @@ int main()
 {
     LogicMachine<FactName, Planet, Star> db;
 
-    //Intiial Facts
+    //Initial Facts
     db.add(FactName::Orbits, new Fact<Planet,Star>("ab", Planet::Mercury, Star::Sun));
     db.add(FactName::Orbits, new Fact<Planet,Star>("ab", Planet::Venus, Star::Sun));
     db.add(FactName::Orbits, new Fact<Planet,Star>("ab", Planet::Earth, Star::Sun));

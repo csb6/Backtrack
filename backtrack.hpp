@@ -1,5 +1,5 @@
-#include <vector>
-#include <map>
+#ifndef BACKTRACK_LIB_H
+#define BACKTRACK_LIB_H
 /* Author: Cole Blakley
    File: backtrack.hpp
    Purpose: The program is a sort of Prolog within C++. You create a Logic
@@ -23,8 +23,9 @@
      the rule's functor accepts. For example, a function that needs an
      A value and a B value would have a decoder string "ab".
 */
+#include <vector>
+#include <map>
 #include <type_traits> // for std::is_same
-#include <cstdint> // for std::int_least16_t
 #include <cstdarg> // for ellipsis
 #include <functional>
 #include <string>
@@ -48,7 +49,12 @@ public:
 	if(decoder != m_decoder) {
 	    return false;
 	}
-        return m_pred(decoder, args);
+	//Have to copy args since taking items out of args is destructive
+	va_list argsCopy;
+	va_copy(argsCopy, args);
+        bool result = m_pred(decoder, argsCopy);
+	va_end(argsCopy);
+	return result;
     }
 };
 
@@ -165,3 +171,4 @@ public:
 	return false;
     }
 };
+#endif
