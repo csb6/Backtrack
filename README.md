@@ -8,7 +8,7 @@ but support for backtracking and filling in variables in terms such as
 
 I see the irony of naming a library `backtrack` without supporting
 backtracking, but my intention is to eventually support it in a way similar
-to Prolog does. For now, think of the name as me backtracking on the
+to how Prolog does. For now, think of the name as me backtracking on the
 implication that this library supports backtracking!
 
 ## Installation
@@ -16,14 +16,14 @@ implication that this library supports backtracking!
 The only file you need is `backtrack.hpp`. Simply `#include` it into any
 source/header file that requires the functionality of the library.
 
-The library is written in C++14.
+This library is written in C++14.
 
 ## Usage
 
 ### Creating a database
 
 The main class is called `Database`. You can create as many databases as you
-like, but typically having only one is useful so that knowledge is centralized.
+like, but typically having only one is useful so that all knowledge is centralized.
 Here is a possible instantiation of a database:
 
 ```
@@ -38,17 +38,17 @@ using an enum class called `FactName` or something similar is recommended
 to minimize memory usage and simplify the range of possible fact names.
 
 The last two parameterized types represent the types, `A` and
-`B`, that are the types of any arguments used in any fact or rule.
+`B`, that are the types of any arguments used in all facts and rules.
 
 **Note**: While `A` and `B` can be the same type, both `A` and `B` must be
 a different type than the type used to represent names. This enforces a clear
-separation between what is a fact/rule name and what is an argument of facts/
-rules.
+separation between what is a fact/rule name and what an argument is within
+facts/rules.
 
 Facts and rules can have as many overloads as you like, just like in Prolog
-you can have `nameA(A)`, `nameA(A,B)`, and `name(5,6)` all in the same database.
+you can have `nameA(A).`, `nameA(A,B).`, and `name(5,6).` all in the same database.
 However, all facts and rules must have at least 1 argument, meaning that you
-can not define an argument-less rule like `nameA` in Prolog.
+can not define an argument-less rule like `nameA.` in Prolog.
 
 ### Adding facts to the database
 
