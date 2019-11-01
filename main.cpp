@@ -30,22 +30,22 @@
 
 class Truth {
 public:
-    virtual bool matches(std::string decoder, va_list args) = 0;
+    virtual bool matches(const std::string decoder, va_list args) = 0;
     virtual ~Truth() {};
 };
 
 class Rule : public Truth {
 private:
-    std::string m_decoder;
+    const std::string m_decoder;
     bool(*m_pred)(std::string,va_list);
 public:
-    Rule(std::string decoder, bool(*pred)(std::string,va_list))
+    Rule(const std::string decoder, bool(*pred)(std::string,va_list))
 	: m_decoder(decoder), m_pred(pred)
     {}
-    virtual bool matches(std::string decoder, va_list args) override
+    virtual bool matches(const std::string decoder, va_list args) override
     {
 	if(decoder != m_decoder) {
-	    return false;   
+	    return false;
 	}
         return m_pred(decoder, args);
     }
@@ -54,26 +54,62 @@ public:
 template<typename A, typename B>
 class Fact : public Truth {
 private:
-    A m_a;
-    B m_b;
+    std::vector<A> m_a;
+    std::vector<B> m_b;
+    const std::string m_decoder;
 public:
-    Fact(A a, B b) : m_a(a), m_b(b)
-    {}
-    virtual bool matches(std::string decoder, va_list args) override
+    Fact(const std::string decoder, ...) : m_decoder(decoder)
     {
-	if(decoder != "ab") {
-	    return false;  
+	va_list args;
+	va_start(args, decoder);
+	for(char argType : decoder) {
+	    switch(argType)
+	    {
+	    case 'a': {
+		m_a.push_back(va_arg(args, A));
+		break;
+	    }
+	    case 'b': {
+		m_b.push_back(va_arg(args, B));
+		break;
+	    }
+	    default:
+		assert(1 && "argtype in decoder string isn't 'a' or 'b'");
+	    }
+	}
+	va_end(args);
+    }
+
+    virtual bool matches(const std::string decoder, va_list args) override
+    {
+	if(decoder != m_decoder) {
+	    return false;
 	}
 	//Have to copy args since taking items out of args is destructive
 	va_list argsCopy;
 	va_copy(argsCopy, args);
-	A a = va_arg(argsCopy, A);
-	B b = va_arg(argsCopy, B);
+	//Need to keep track of where checked so index adjusted for m_a & m_b
+	int aCount = 0;
+	int bCount = 0;
+	for(unsigned int i=0; i<decoder.size(); ++i) {
+	    if(decoder[i] == 'a') {
+		if(va_arg(argsCopy, A) != m_a[i-bCount]) {
+		    va_end(argsCopy);
+		    return false;
+		}
+		++aCount;
+	    } else {
+		if(va_arg(argsCopy, B) != m_b[i-aCount]) {
+		    va_end(argsCopy);
+		    return false;
+		}
+		++bCount;
+	    }
+	}
 	va_end(argsCopy);
-        return a == m_a && b == m_b;
+        return true;
     }
 };
-
 
 template<typename N, typename A, typename B>
 class LogicMachine {
@@ -81,7 +117,7 @@ class LogicMachine {
     static_assert(!std::is_same<N,B>::value, "Name type must differ from B type");
 private:
     std::map<N,std::vector<Truth*>> m_truths;
-    
+
     Truth* getCandidates(unsigned int index, const N truthName)
     {
 	if(m_truths.find(truthName) == m_truths.end()
@@ -111,7 +147,7 @@ public:
 	m_truths[ruleName].push_back(pred);
     }
 
-    bool isTrue(const N truthName, std::string decoder, ...)
+    bool isTrue(const N truthName, const std::string decoder, ...)
     {
 	va_list args;
 	va_start(args, decoder);
@@ -129,21 +165,20 @@ public:
     }
 };
 
-
 enum class FactName : std::int_least16_t {
     Orbits,
     InSolarSystem,
     Truth
 };
 
-enum class Planet : std::int_least16_t {
+enum class Planet {
     Mercury,
     Venus,
     Earth,
     Mars
 };
 
-enum class Star : std::int_least16_t {
+enum class Star {
     Sun,
     AlphaCentauri
 };
@@ -164,8 +199,7 @@ bool alwaysTrue(std::string decoder, va_list args)
 	    break;
 	}
 	default:
-	    assert(1);
-	    return false;
+	    assert(1 && "argtype in decoder string isn't 'a' or 'b'");
 	}
     }
     return p == Planet::Mercury && s == Star::Sun;
@@ -176,19 +210,27 @@ int main()
     LogicMachine<FactName, Planet, Star> db;
 
     //Intiial Facts
-    db.add(FactName::Orbits, new Fact<Planet,Star>(Planet::Mercury, Star::Sun));
-    db.add(FactName::Orbits, new Fact<Planet,Star>(Planet::Venus, Star::Sun));
-    db.add(FactName::Orbits, new Fact<Planet,Star>(Planet::Earth, Star::Sun));
+    db.add(FactName::Orbits, new Fact<Planet,Star>("ab", Planet::Mercury, Star::Sun));
+    db.add(FactName::Orbits, new Fact<Planet,Star>("ab", Planet::Venus, Star::Sun));
+    db.add(FactName::Orbits, new Fact<Planet,Star>("ab", Planet::Earth, Star::Sun));
+    db.add(FactName::Orbits, new Fact<Planet,Star>("ba", Star::Sun, Planet::Earth));
+    db.add(FactName::InSolarSystem,
+	   new Fact<Planet,Star>("aaaa", Planet::Venus, Planet::Mercury, Planet::Mars,
+				 Planet::Earth));
 
     std::cout << db.isTrue(FactName::Orbits, "ab", Planet::Earth, Star::Sun)
 	      << '\n';
 
     //Predicates
     db.add(FactName::Truth, new Rule("ab", alwaysTrue));
-    
+
     std::cout << db.isTrue(FactName::Truth, "ab", Planet::Mercury, Star::Sun) << '\n';
 
     std::cout << db.isTrue(FactName::Orbits, "ab", Planet::Venus, Star::AlphaCentauri)
 	      << '\n';
+    std::cout << db.isTrue(FactName::Orbits, "ba", Star::Sun, Planet::Earth)
+	      << '\n';
+    std::cout << db.isTrue(FactName::InSolarSystem, "aaaa", Planet::Venus,
+			   Planet::Mercury, Planet::Mars, Planet::Earth) << '\n';
     return 0;
 }

@@ -87,3 +87,19 @@ How to solve?
 		-Plug it in, solve !F(3) or !G(3) or B(3) (Success)
 		-B(3) is known as true, so !B(3) is false. Continue.
 	6. Therefore, W(3) must be true to satisfy the rule. Print true out to the user.
+
+How to implement simple operations (1-4) in C++?
+
+    LogicMachine db;
+
+    db.add(N ruleName, int predicateCount, ...)
+
+Ex:
+    LogicMachine<std::string,int,int> db;
+    db.add("B", 2, functionPtrForF, functionPtrForG);
+
+Need to figure out:
+    - How to define facts with 1 or 3+ arguments (right now, requires 2)
+    - How to define facts with varying arg types (right now, requires (A a, B b))
+    - How to define rules in terms of rules already in db
+    - How to define rules in terms of facts already in db
