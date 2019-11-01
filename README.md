@@ -6,10 +6,10 @@ Prolog can be defined, as well as queries providing all of their arguments,
 but support for backtracking and filling in variables in terms such as
 `predicate(X,5)` are also not supported.
 
-I understand the irony of a library called backtrack not yet supporting
-backtracking, but my intention is to eventual support for it. For now
-though, think of the name as me backtracking the implication that the
-library supports backtracking!
+I see the irony of naming a library `backtrack` without supporting
+backtracking, but my intention is to eventually support it in a way similar
+to Prolog does. For now, think of the name as me backtracking on the
+implication that this library supports backtracking!
 
 ## Installation
 
