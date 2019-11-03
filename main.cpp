@@ -26,6 +26,8 @@ int main()
 
     Fact<int,std::string> a(2, "hey bro", 5, 6, "9");
     std::cout << "Fact matches? " << a.matches(2, "hey bro", 5, 6, "9") << '\n';
+    std::optional<int> missing = a.deduceA(2, 2, "hey bro", 6, "9").value_or(-1);
+    std::cout << "Item at pos 2 (-1 means error): " << *missing << '\n'; 
 
     //Initial Facts
     db.add(FactName::Orbits, new Fact<Planet,Star>(Planet::Mercury, Star::Sun));
@@ -61,10 +63,10 @@ int main()
     std::cout << db.isTrue(FactName::Orbits, Star::Sun, Planet::Earth) << '\n';
     std::cout << db.isTrue(FactName::InSolarSystem, Planet::Venus,
 			   Planet::Mercury, Planet::Mars, Planet::Earth) << '\n';
-    /*//Right now, only works with deducing arg of types within a Fact
-    Planet solution = db.deduceA(FactName::Orbits, "ab", 0, Star::Sun);
-    std::cout << "Solution: " << (int)solution << '\n';
-    Star solution2 = db.deduceB(FactName::Orbits, "ab", 1, Planet::Venus);
+    //Right now, only works with deducing arg of types within a Fact
+    auto solution = db.deduceA(FactName::Orbits, 0, Star::Sun);
+    std::cout << "Solution: " << (int)solution.value() << '\n';
+    /*Star solution2 = db.deduceB(FactName::Orbits, "ab", 1, Planet::Venus);
     std::cout << "Solution: " << (int)solution2 << '\n';*/
     return 0;
 }

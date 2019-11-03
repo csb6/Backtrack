@@ -119,7 +119,7 @@ public:
 	if(indexA < m_a.size()) {
 	    success = (m_a[indexA] == value);
 	}
-	indexA = 0;
+	indexA = indexB = 0;
 	return success;
     }
     
@@ -129,7 +129,7 @@ public:
 	if(indexB < m_b.size()) {
 	    success = (m_b[indexB] == value);
 	}
-	indexB = 0;
+	indexB = indexA = 0;
 	return success;
     }
 
@@ -137,7 +137,7 @@ public:
     bool matches(A value, Args... rest)
     {
 	if(indexA >= m_a.size()) {
-	    indexA = 0;
+	    indexA = indexB = 0;
 	    return false;
 	}
 	return m_a[indexA++] == value && matches(rest...);
@@ -147,46 +147,67 @@ public:
     bool matches(B value, Args... rest)
     {
 	if(indexB >= m_b.size()) {
-	    indexB = 0;
+	    indexB = indexA = 0;
 	    return false;
 	}
 	return m_b[indexB++] == value && matches(rest...);
     }
 
-    std::optional<A> deduceA(const std::string decoder, unsigned int pos,
-			      va_list args)
+    std::optional<A> deduceA(unsigned int pos, A next)
     {
-	if(decoder != m_decoder) {
+	std::optional<A> result;
+	if(indexA < m_a.size() && indexA+indexB == pos) {
+	    result = m_a[indexA];
+	}
+	indexB = indexA = 0;
+	return result;
+    }
+
+    std::optional<A> deduceA(unsigned int pos, B next)
+    {
+	std::optional<A> result;
+	if(indexB < m_b.size() && indexA+indexB == pos) {
+	    result = m_a[indexA];
+	}
+	indexB = indexA = 0;
+	return result;
+    }
+
+    template<typename ...Args>
+    std::optional<A> deduceA(unsigned int pos, B next, Args... rest)
+    {
+	if(indexB >= m_b.size() || indexB+indexA == pos) {
+	    indexB = indexA = 0;
+	    return {};
+	} else if(m_b[indexB] != next) {
+	    indexB = indexA = 0;
+	    return {};
+	} else {
+	    ++indexB;
+	    return deduceA(pos, rest...);
+	}
+    }
+
+    template<typename ...Args>
+    std::optional<A> deduceA(unsigned int pos, A next, Args... rest)
+    {
+	if(indexA >= m_a.size()) {
+	    indexB = indexA = 0;
+	    return {};
+	} else if(indexA+indexB != pos && m_a[indexA] != next) {
+	    indexB = indexA = 0;
 	    return {};
 	}
-	//Have to copy args since taking items out of args is destructive
-	va_list argsCopy;
-	va_copy(argsCopy, args);
-	int aCount = 0;
-	int bCount = 0;
-	std::optional<A> deducedVal;
-	for(unsigned int i=0; i<decoder.size(); ++i) {
-	    if(decoder[i] == 'a') {
-		if(i == pos) {
-		    deducedVal = m_a[i-bCount];
-		} else if(va_arg(argsCopy, A) != m_a[i-bCount]) {
-		    va_end(argsCopy);
-		    return {};
-		}
-		++aCount;
+	if(indexA+indexB == pos) {
+	    std::optional<A> result = m_a[indexA++];
+	    if(matches(next, rest...)) {
+		return result;
 	    } else {
-		if (i == pos) {
-		    va_end(argsCopy);
-		    return {};
-		} else if(va_arg(argsCopy, B) != m_b[i-aCount]) {
-		    va_end(argsCopy);
-		    return {};
-		}
-		++bCount;
+		return {};
 	    }
 	}
-	va_end(argsCopy);
-	return deducedVal;
+	++indexA;
+	return deduceA(pos, rest...);
     }
 
     std::optional<B> deduceB(const std::string decoder, unsigned int pos,
@@ -276,28 +297,23 @@ public:
 	return false;
     }
 
-    /*//Right now, only works for finding missing types within facts
-    A deduceA(const N truthName, const std::string decoder,
-	      unsigned int pos, ...)
+    template<typename ...Args>
+    std::optional<A> deduceA(const N truthName, unsigned int pos, Args... rest)
     {
-	va_list args;
-	va_start(args, pos);
-	Truth<A,B> *truth = nullptr;
+	Fact<A,B> *fact = nullptr;
 	unsigned int index = 0;
-	std::optional<A> deducedVal;
-	while((truth = getCandidates(index, truthName)) != nullptr) {
-	    deducedVal = truth->deduceA(decoder, pos, args);
-	    if(deducedVal.has_value()) {
-		va_end(args);
-		return *deducedVal;
+	std::optional<A> result;
+	while((fact = getCandidates(index, truthName)) != nullptr) {
+	    result = fact->deduceA(pos, rest...);
+	    if(result.has_value()) {
+		return result;
 	    }
 	    ++index;
 	}
-	va_end(args);
-	throw std::logic_error("deduceA: Could not find A to satisify arguments");
+	return result;
     }
 
-    B deduceB(const N truthName, const std::string decoder,
+    /*B deduceB(const N truthName, const std::string decoder,
 	      unsigned int pos, ...)
     {
 	va_list args;
@@ -315,6 +331,6 @@ public:
 	}
 	va_end(args);
 	throw std::logic_error("deduceB: Could not find B to satisify arguments");
-	}*/
+    }*/
 };
 #endif
