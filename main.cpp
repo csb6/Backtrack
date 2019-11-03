@@ -28,7 +28,7 @@ int main()
 				 Planet::Earth));
     //Predicates
     db.add(FactName::Truth,
-	   new Rule("ab",
+	   new Rule<Planet,Star>("ab",
 		    [&db](const std::string decoder, va_list args) {
 			//db is captured, so can be used to call other predicates
 			Planet p = Planet::Mars;
@@ -52,5 +52,10 @@ int main()
     std::cout << db.isTrue(FactName::Orbits, "ba", Star::Sun, Planet::Earth) << '\n';
     std::cout << db.isTrue(FactName::InSolarSystem, "aaaa", Planet::Venus,
 			   Planet::Mercury, Planet::Mars, Planet::Earth) << '\n';
+    //Right now, only works with deducing arg of types within a Fact
+    Planet solution = db.deduceA(FactName::Orbits, "ab", 0, Star::Sun);
+    std::cout << "Solution: " << (int)solution << '\n';
+    Star solution2 = db.deduceB(FactName::Orbits, "ab", 1, Planet::Venus);
+    std::cout << "Solution: " << (int)solution2 << '\n';
     return 0;
 }

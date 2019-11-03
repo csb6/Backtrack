@@ -29,14 +29,21 @@
 #include <cstdarg> // for ellipsis
 #include <functional>
 #include <string>
+#include <optional>
 
+template<typename A, typename B>
 class Truth {
 public:
     virtual bool matches(const std::string decoder, va_list args) = 0;
+    virtual std::optional<A> deduceA(const std::string decoder, unsigned int pos,
+				     va_list args) = 0;
+    virtual std::optional<B> deduceB(const std::string decoder, unsigned int pos,
+				     va_list args) = 0;
     virtual ~Truth() {};
 };
 
-class Rule : public Truth {
+template<typename A, typename B>
+class Rule : public Truth<A,B> {
 private:
     const std::string m_decoder;
     std::function<bool(std::string,va_list)> m_pred;
@@ -56,10 +63,22 @@ public:
 	va_end(argsCopy);
 	return result;
     }
+
+    virtual std::optional<A> deduceA(const std::string decoder, unsigned int pos,
+				     va_list args) override
+    {
+	return {};
+    }
+
+    virtual std::optional<B> deduceB(const std::string decoder, unsigned int pos,
+				     va_list args) override
+    {
+	return {};
+    }
 };
 
 template<typename A, typename B>
-class Fact : public Truth {
+class Fact : public Truth<A,B> {
 private:
     std::vector<A> m_a;
     std::vector<B> m_b;
@@ -70,17 +89,11 @@ public:
 	va_list args;
 	va_start(args, decoder);
 	for(char argType : decoder) {
-	    switch(argType)
-	    {
-	    case 'a': {
+	    if(argType == 'a') {
 		m_a.push_back(va_arg(args, A));
-		break;
-	    }
-	    case 'b': {
+	    } else if(argType == 'b'){
 		m_b.push_back(va_arg(args, B));
-		break;
-	    }
-	    default:
+	    } else {
 		assert(1 && "argtype in decoder string isn't 'a' or 'b'");
 	    }
 	}
@@ -116,6 +129,78 @@ public:
 	va_end(argsCopy);
         return true;
     }
+
+    virtual std::optional<A> deduceA(const std::string decoder, unsigned int pos,
+				     va_list args) override
+    {
+	if(decoder != m_decoder) {
+	    return {};
+	}
+	//Have to copy args since taking items out of args is destructive
+	va_list argsCopy;
+	va_copy(argsCopy, args);
+	int aCount = 0;
+	int bCount = 0;
+	std::optional<A> deducedVal;
+	for(unsigned int i=0; i<decoder.size(); ++i) {
+	    if(decoder[i] == 'a') {
+		if(i == pos) {
+		    deducedVal = m_a[i-bCount];
+		} else if(va_arg(argsCopy, A) != m_a[i-bCount]) {
+		    va_end(argsCopy);
+		    return {};
+		}
+		++aCount;
+	    } else {
+		if (i == pos) {
+		    va_end(argsCopy);
+		    return {};
+		} else if(va_arg(argsCopy, B) != m_b[i-aCount]) {
+		    va_end(argsCopy);
+		    return {};
+		}
+		++bCount;
+	    }
+	}
+	va_end(argsCopy);
+	return deducedVal;
+    }
+
+    virtual std::optional<B> deduceB(const std::string decoder, unsigned int pos,
+				     va_list args) override
+    {
+	if(decoder != m_decoder) {
+	    return {};
+	}
+	//Have to copy args since taking items out of args is destructive
+	va_list argsCopy;
+	va_copy(argsCopy, args);
+	int aCount = 0;
+	int bCount = 0;
+        std::optional<B> deducedVal;
+	for(unsigned int i=0; i<decoder.size(); ++i) {
+	    if(decoder[i] == 'a') {
+		if(i == pos) {;
+		    va_end(argsCopy);
+		    return {};
+		} else if(va_arg(argsCopy, A) != m_a[i-bCount]) {
+		    va_end(argsCopy);
+		    return {};
+		}
+		++aCount;
+	    } else {
+		if (i == pos) {
+		    deducedVal = m_b[i-aCount];
+		} else if(va_arg(argsCopy, B) != m_b[i-aCount]) {
+		    va_end(argsCopy);
+		    return {};
+		}
+		++bCount;
+	    }
+	}
+	va_end(argsCopy);
+	return deducedVal;
+    }
 };
 
 template<typename N, typename A, typename B>
@@ -123,9 +208,9 @@ class Database {
     static_assert(!std::is_same<N,A>::value, "Name type must differ from A type");
     static_assert(!std::is_same<N,B>::value, "Name type must differ from B type");
 private:
-    std::map<N,std::vector<Truth*>> m_truths;
+    std::map<N,std::vector<Truth<A,B>*>> m_truths;
 
-    Truth* getCandidates(unsigned int index, const N truthName)
+    Truth<A,B>* getCandidates(unsigned int index, const N truthName)
     {
 	if(m_truths.find(truthName) == m_truths.end()
 	   || index >= m_truths[truthName].size()) {
@@ -149,7 +234,7 @@ public:
 	m_truths[factName].push_back(fact);
     }
 
-    void add(const N ruleName, Rule *pred)
+    void add(const N ruleName, Rule<A,B> *pred)
     {
 	m_truths[ruleName].push_back(pred);
     }
@@ -158,7 +243,7 @@ public:
     {
 	va_list args;
 	va_start(args, decoder);
-	Truth* truth = nullptr;
+	Truth<A,B> *truth = nullptr;
 	unsigned int index = 0;
 	while((truth = getCandidates(index, truthName)) != nullptr) {
 	    if(truth->matches(decoder, args)) {
@@ -169,6 +254,47 @@ public:
 	}
 	va_end(args);
 	return false;
+    }
+
+    //Right now, only works for finding missing types within facts
+    A deduceA(const N truthName, const std::string decoder,
+	      unsigned int pos, ...)
+    {
+	va_list args;
+	va_start(args, pos);
+	Truth<A,B> *truth = nullptr;
+	unsigned int index = 0;
+	std::optional<A> deducedVal;
+	while((truth = getCandidates(index, truthName)) != nullptr) {
+	    deducedVal = truth->deduceA(decoder, pos, args);
+	    if(deducedVal.has_value()) {
+		va_end(args);
+		return *deducedVal;
+	    }
+	    ++index;
+	}
+	va_end(args);
+	throw std::logic_error("deduceA: Could not find A to satisify arguments");
+    }
+
+    B deduceB(const N truthName, const std::string decoder,
+	      unsigned int pos, ...)
+    {
+	va_list args;
+	va_start(args, pos);
+	Truth<A,B> *truth = nullptr;
+	unsigned int index = 0;
+	std::optional<B> deducedVal;
+	while((truth = getCandidates(index, truthName)) != nullptr) {
+	    deducedVal = truth->deduceB(decoder, pos, args);
+	    if(deducedVal.has_value()) {
+		va_end(args);
+		return *deducedVal;
+	    }
+	    ++index;
+	}
+	va_end(args);
+	throw std::logic_error("deduceB: Could not find B to satisify arguments");
     }
 };
 #endif
