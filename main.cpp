@@ -14,22 +14,28 @@ enum class Star {
     Sun, AlphaCentauri
 };
 
+template<typename... Types>
+bool matches(std::tuple<Types...> a, std::tuple<Types...> b)
+{
+    return a == b;
+}
+
 int main()
 {
     Database<FactName, Planet, Star> db;
 
     //Initial Facts
-    db.add(FactName::Orbits, new Fact<Planet,Star>("ab", Planet::Mercury, Star::Sun));
-    db.add(FactName::Orbits, new Fact<Planet,Star>("ab", Planet::Venus, Star::Sun));
-    db.add(FactName::Orbits, new Fact<Planet,Star>("ab", Planet::Earth, Star::Sun));
-    db.add(FactName::Orbits, new Fact<Planet,Star>("ba", Star::Sun, Planet::Earth));
+    db.add(FactName::Orbits, new Fact<Planet,Star>(Planet::Mercury, Star::Sun));
+    db.add(FactName::Orbits, new Fact<Planet,Star>(Planet::Venus, Star::Sun));
+    db.add(FactName::Orbits, new Fact<Planet,Star>(Planet::Earth, Star::Sun));
+    db.add(FactName::Orbits, new Fact<Planet,Star>(Star::Sun, Planet::Earth));
     db.add(FactName::InSolarSystem,
-	   new Fact<Planet,Star>("aaaa", Planet::Venus, Planet::Mercury, Planet::Mars,
+	   new Fact<Planet,Star>(Planet::Venus, Planet::Mercury, Planet::Mars,
 				 Planet::Earth));
     //Predicates
     db.add(FactName::Truth,
 	   new Rule<Planet,Star>("ab",
-		    [&db](const std::string decoder, va_list args) {
+		    [](const std::string decoder, va_list args) {
 			//db is captured, so can be used to call other predicates
 			Planet p = Planet::Mars;
 			Star s = Star::AlphaCentauri;

@@ -79,25 +79,23 @@ public:
 
 template<typename A, typename B>
 class Fact : public Truth<A,B> {
+    static_assert(!std::is_same<A,B>::value, "A and B must be different types");
 private:
     std::vector<A> m_a;
     std::vector<B> m_b;
     const std::string m_decoder;
 public:
-    Fact(const std::string decoder, ...) : m_decoder(decoder)
+    Fact(A value) { m_a.push_back(value); }
+    Fact(B value) { m_b.push_back(value); }
+    template<typename ...Args>
+    Fact(A value, Args... rest) : Fact<A,B>(rest...)
     {
-	va_list args;
-	va_start(args, decoder);
-	for(char argType : decoder) {
-	    if(argType == 'a') {
-		m_a.push_back(va_arg(args, A));
-	    } else if(argType == 'b'){
-		m_b.push_back(va_arg(args, B));
-	    } else {
-		assert(1 && "argtype in decoder string isn't 'a' or 'b'");
-	    }
-	}
-	va_end(args);
+	m_a.push_back(value);
+    }
+    template<typename ...Args>
+    Fact(B value, Args... rest) : Fact<A,B>(rest...)
+    {
+	m_b.push_back(value);
     }
 
     virtual bool matches(const std::string decoder, va_list args) override
