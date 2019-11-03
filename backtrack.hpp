@@ -31,10 +31,16 @@
 #include <string>
 #include <optional>
 
-template<typename A, typename B>
+/*template<typename A, typename B>
 class Truth {
+     static_assert(!std::is_same<A,B>::value, "A and B must be different types");
 public:
-    virtual bool matches(const std::string decoder, va_list args) = 0;
+    virtual bool matches(A value) = 0;
+    virtual bool matches(B value) = 0;
+    template<typename ...Args>
+    virtual bool matches(A value, Args... rest) = 0;
+    template<typename ...Args>
+    virtual bool matches(B value, Args... rest) = 0;
     virtual std::optional<A> deduceA(const std::string decoder, unsigned int pos,
 				     va_list args) = 0;
     virtual std::optional<B> deduceB(const std::string decoder, unsigned int pos,
@@ -51,7 +57,12 @@ public:
     Rule(const std::string decoder, std::function<bool(std::string,va_list)> pred)
 	: m_decoder(decoder), m_pred(pred)
     {}
-    virtual bool matches(const std::string decoder, va_list args) override
+
+    virtual bool matches(A value) override { return false; }
+    virtual bool matches(B value) override { return false; }
+    
+    template<typename ...Args>
+    virtual bool matches(A value, Args... rest) override
     {
 	if(decoder != m_decoder) {
 	    return false;
@@ -64,6 +75,9 @@ public:
 	return result;
     }
 
+    template<typename ...Args>
+    virtual bool matches(B value, Args... rest) { return false; }
+
     virtual std::optional<A> deduceA(const std::string decoder, unsigned int pos,
 				     va_list args) override
     {
@@ -75,61 +89,72 @@ public:
     {
 	return {};
     }
-};
+};*/
 
 template<typename A, typename B>
-class Fact : public Truth<A,B> {
-    static_assert(!std::is_same<A,B>::value, "A and B must be different types");
+class Fact {
 private:
     std::vector<A> m_a;
     std::vector<B> m_b;
     const std::string m_decoder;
+    unsigned int indexA = 0;
+    unsigned int indexB = 0;
 public:
-    Fact(A value) { m_a.push_back(value); }
-    Fact(B value) { m_b.push_back(value); }
+    Fact(A value) { m_a.insert(m_a.begin(), value); }
+    Fact(B value) { m_b.insert(m_b.begin(), value); }
     template<typename ...Args>
     Fact(A value, Args... rest) : Fact<A,B>(rest...)
     {
-	m_a.push_back(value);
+	m_a.insert(m_a.begin(), value);
     }
     template<typename ...Args>
     Fact(B value, Args... rest) : Fact<A,B>(rest...)
     {
-	m_b.push_back(value);
+	m_b.insert(m_b.begin(), value);
     }
 
-    virtual bool matches(const std::string decoder, va_list args) override
+    bool matches(A value)
     {
-	if(decoder != m_decoder) {
+	bool success = false;
+	if(indexA < m_a.size()) {
+	    success = (m_a[indexA] == value);
+	}
+	indexA = 0;
+	return success;
+    }
+    
+    bool matches(B value)
+    {
+	bool success = false;
+	if(indexB < m_b.size()) {
+	    success = (m_b[indexB] == value);
+	}
+	indexB = 0;
+	return success;
+    }
+
+    template<typename ...Args>
+    bool matches(A value, Args... rest)
+    {
+	if(indexA >= m_a.size()) {
+	    indexA = 0;
 	    return false;
 	}
-	//Have to copy args since taking items out of args is destructive
-	va_list argsCopy;
-	va_copy(argsCopy, args);
-	//Need to keep track of where checked so index adjusted for m_a & m_b
-	int aCount = 0;
-	int bCount = 0;
-	for(unsigned int i=0; i<decoder.size(); ++i) {
-	    if(decoder[i] == 'a') {
-		if(va_arg(argsCopy, A) != m_a[i-bCount]) {
-		    va_end(argsCopy);
-		    return false;
-		}
-		++aCount;
-	    } else {
-		if(va_arg(argsCopy, B) != m_b[i-aCount]) {
-		    va_end(argsCopy);
-		    return false;
-		}
-		++bCount;
-	    }
-	}
-	va_end(argsCopy);
-        return true;
+	return m_a[indexA++] == value && matches(rest...);
     }
 
-    virtual std::optional<A> deduceA(const std::string decoder, unsigned int pos,
-				     va_list args) override
+    template<typename ...Args>
+    bool matches(B value, Args... rest)
+    {
+	if(indexB >= m_b.size()) {
+	    indexB = 0;
+	    return false;
+	}
+	return m_b[indexB++] == value && matches(rest...);
+    }
+
+    std::optional<A> deduceA(const std::string decoder, unsigned int pos,
+			      va_list args)
     {
 	if(decoder != m_decoder) {
 	    return {};
@@ -164,8 +189,8 @@ public:
 	return deducedVal;
     }
 
-    virtual std::optional<B> deduceB(const std::string decoder, unsigned int pos,
-				     va_list args) override
+    std::optional<B> deduceB(const std::string decoder, unsigned int pos,
+			     va_list args)
     {
 	if(decoder != m_decoder) {
 	    return {};
@@ -206,9 +231,9 @@ class Database {
     static_assert(!std::is_same<N,A>::value, "Name type must differ from A type");
     static_assert(!std::is_same<N,B>::value, "Name type must differ from B type");
 private:
-    std::map<N,std::vector<Truth<A,B>*>> m_truths;
+    std::map<N,std::vector<Fact<A,B>*>> m_truths;
 
-    Truth<A,B>* getCandidates(unsigned int index, const N truthName)
+    Fact<A,B>* getCandidates(unsigned int index, const N truthName)
     {
 	if(m_truths.find(truthName) == m_truths.end()
 	   || index >= m_truths[truthName].size()) {
@@ -232,29 +257,26 @@ public:
 	m_truths[factName].push_back(fact);
     }
 
-    void add(const N ruleName, Rule<A,B> *pred)
+    /*void add(const N ruleName, Rule<A,B> *pred)
     {
 	m_truths[ruleName].push_back(pred);
-    }
+	}*/
 
-    bool isTrue(const N truthName, const std::string decoder, ...)
+    template<typename ...Args>
+    bool isTrue(const N truthName, Args... rest)
     {
-	va_list args;
-	va_start(args, decoder);
-	Truth<A,B> *truth = nullptr;
+	Fact<A,B> *fact = nullptr;
 	unsigned int index = 0;
-	while((truth = getCandidates(index, truthName)) != nullptr) {
-	    if(truth->matches(decoder, args)) {
-		va_end(args);
+	while((fact = getCandidates(index, truthName)) != nullptr) {
+	    if(fact->matches(rest...)) {
 		return true;
 	    }
 	    ++index;
 	}
-	va_end(args);
 	return false;
     }
 
-    //Right now, only works for finding missing types within facts
+    /*//Right now, only works for finding missing types within facts
     A deduceA(const N truthName, const std::string decoder,
 	      unsigned int pos, ...)
     {
@@ -293,6 +315,6 @@ public:
 	}
 	va_end(args);
 	throw std::logic_error("deduceB: Could not find B to satisify arguments");
-    }
+	}*/
 };
 #endif

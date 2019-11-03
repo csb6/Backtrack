@@ -24,6 +24,9 @@ int main()
 {
     Database<FactName, Planet, Star> db;
 
+    Fact<int,std::string> a(2, "hey bro", 5, 6, "9");
+    std::cout << "Fact matches? " << a.matches(2, "hey bro", 5, 6, "9") << '\n';
+
     //Initial Facts
     db.add(FactName::Orbits, new Fact<Planet,Star>(Planet::Mercury, Star::Sun));
     db.add(FactName::Orbits, new Fact<Planet,Star>(Planet::Venus, Star::Sun));
@@ -33,7 +36,7 @@ int main()
 	   new Fact<Planet,Star>(Planet::Venus, Planet::Mercury, Planet::Mars,
 				 Planet::Earth));
     //Predicates
-    db.add(FactName::Truth,
+    /* db.add(FactName::Truth,
 	   new Rule<Planet,Star>("ab",
 		    [](const std::string decoder, va_list args) {
 			//db is captured, so can be used to call other predicates
@@ -49,19 +52,19 @@ int main()
 			    }
 			}
 			return p == Planet::Mercury && s == Star::Sun;
-		    }));
+			}));*/
 
-    std::cout << db.isTrue(FactName::Orbits, "ab", Planet::Earth, Star::Sun) << '\n';
-    std::cout << db.isTrue(FactName::Truth, "ab", Planet::Mercury, Star::Sun) << '\n';
-    std::cout << db.isTrue(FactName::Orbits, "ab", Planet::Venus, Star::AlphaCentauri)
+    std::cout << db.isTrue(FactName::Orbits, Planet::Earth, Star::Sun) << '\n';
+    std::cout << db.isTrue(FactName::Truth, Planet::Mercury, Star::Sun) << '\n';
+    std::cout << db.isTrue(FactName::Orbits, Planet::Venus, Star::AlphaCentauri)
 	      << '\n';
-    std::cout << db.isTrue(FactName::Orbits, "ba", Star::Sun, Planet::Earth) << '\n';
-    std::cout << db.isTrue(FactName::InSolarSystem, "aaaa", Planet::Venus,
+    std::cout << db.isTrue(FactName::Orbits, Star::Sun, Planet::Earth) << '\n';
+    std::cout << db.isTrue(FactName::InSolarSystem, Planet::Venus,
 			   Planet::Mercury, Planet::Mars, Planet::Earth) << '\n';
-    //Right now, only works with deducing arg of types within a Fact
+    /*//Right now, only works with deducing arg of types within a Fact
     Planet solution = db.deduceA(FactName::Orbits, "ab", 0, Star::Sun);
     std::cout << "Solution: " << (int)solution << '\n';
     Star solution2 = db.deduceB(FactName::Orbits, "ab", 1, Planet::Venus);
-    std::cout << "Solution: " << (int)solution2 << '\n';
+    std::cout << "Solution: " << (int)solution2 << '\n';*/
     return 0;
 }
