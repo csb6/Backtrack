@@ -96,154 +96,125 @@ class Fact {
 private:
     std::vector<A> m_a;
     std::vector<B> m_b;
-    const std::string m_decoder;
-    unsigned int indexA = 0;
-    unsigned int indexB = 0;
+    using len_t = std::string::size_type;
 public:
-    Fact(A value) { m_a.insert(m_a.begin(), value); }
-    Fact(B value) { m_b.insert(m_b.begin(), value); }
+    std::string m_decoder;
+    Fact(A value) { m_a.insert(m_a.begin(), value); m_decoder.insert(m_decoder.begin(), 'a'); }
+    Fact(B value) { m_b.insert(m_b.begin(), value); m_decoder.insert(m_decoder.begin(), 'b'); }
     template<typename ...Args>
     Fact(A value, Args... rest) : Fact<A,B>(rest...)
     {
 	m_a.insert(m_a.begin(), value);
+	m_decoder.insert(m_decoder.begin(), 'a');
     }
     template<typename ...Args>
     Fact(B value, Args... rest) : Fact<A,B>(rest...)
     {
 	m_b.insert(m_b.begin(), value);
+	m_decoder.insert(m_decoder.begin(), 'b');
     }
 
-    bool matches(A value)
+    template<typename ...Args>
+    bool matches(Args... rest)
     {
-	bool success = false;
-	if(indexA < m_a.size()) {
-	    success = (m_a[indexA] == value);
+	return _matches(0, 0, 0, rest...);
+    }
+
+    bool _matches(len_t index, len_t indexA, len_t indexB,
+		 A value)
+    {
+	if(indexA >= m_a.size() || index != m_decoder.size()-1) {
+	    return false;
+	} else if(m_a[indexA] == value) {
+	    return true;
 	}
-	indexA = indexB = 0;
-	return success;
+	return false;
+    }
+    bool _matches(len_t index, len_t indexA, len_t indexB,
+		 B value)
+    {
+	if(indexB >= m_b.size() || index != m_decoder.size()-1) {
+	    return false;
+	} else if(m_b[indexB] == value) {
+	    return true;
+	}
+	return false;
+    }
+    template<typename ...Args>
+    bool _matches(len_t index, len_t indexA, len_t indexB,
+		 A value, Args... rest)
+    {
+	if(indexA >= m_a.size() || index >= m_decoder.size()) {
+	    return false;
+	} else if(m_decoder[index] == 'a' && m_a[indexA] == value) {
+	    return _matches(index+1, indexA+1, indexB, rest...);
+	}
+	return false;
+    }
+    template<typename ...Args>
+    bool _matches(len_t index, len_t indexA, len_t indexB,
+		 B value, Args... rest)
+    {
+	if(indexB >= m_b.size() || index >= m_decoder.size()) {
+	    return false;
+	} else if(m_decoder[index] == 'b' && m_b[indexB] == value) {
+	    return _matches(index+1, indexA, indexB+1, rest...);
+	}
+	return false;
     }
     
-    bool matches(B value)
-    {
-	bool success = false;
-	if(indexB < m_b.size()) {
-	    success = (m_b[indexB] == value);
-	}
-	indexB = indexA = 0;
-	return success;
-    }
-
     template<typename ...Args>
-    bool matches(A value, Args... rest)
+    std::optional<A> deduceA(len_t goal, Args... rest)
     {
-	if(indexA >= m_a.size()) {
-	    indexA = indexB = 0;
-	    return false;
-	}
-	return m_a[indexA++] == value && matches(rest...);
+	return _deduceA(0, 0, 0, goal, rest...);
     }
-
+    std::optional<A> _deduceA(len_t index, len_t indexA, len_t indexB, len_t goal,
+			     A value)
+    {
+	if(indexA >= m_a.size() || index != m_decoder.size()-2) {
+	    return {};
+	} else if(index == goal && m_a[indexA] == value) {
+	    return m_a[indexA];
+	}
+	return {};
+    }
+    std::optional<A> _deduceA(len_t index, len_t indexA, len_t indexB, len_t goal,
+			     B value)
+    {
+	if(indexB >= m_b.size() || index != m_decoder.size()-2) {
+	    return {};
+	} else if(index == goal && m_b[indexB] == value) {
+	    return m_a[indexA];
+	}
+	return {};
+    }
     template<typename ...Args>
-    bool matches(B value, Args... rest)
+    std::optional<A> _deduceA(len_t index, len_t indexA, len_t indexB, len_t goal,
+			     A value, Args... rest)
     {
-	if(indexB >= m_b.size()) {
-	    indexB = indexA = 0;
-	    return false;
+	if(indexA >= m_a.size() || index >= m_decoder.size()) {
+	    return {};
+	} else if(index == goal && _matches(index+1, indexA+1, indexB, value, rest...)) {
+	    return m_a[indexA];
+	} else if(index != goal && m_decoder[index] == 'a'
+		  && m_a[indexA] == value) {
+	    return _deduceA(index+1, indexA+1, indexB, goal, rest...);
 	}
-	return m_b[indexB++] == value && matches(rest...);
+	return {};
     }
-
-    std::optional<A> deduceA(unsigned int pos, A next)
-    {
-	std::optional<A> result;
-	if(indexA < m_a.size() && indexA+indexB == pos) {
-	    result = m_a[indexA];
-	}
-	indexB = indexA = 0;
-	return result;
-    }
-
-    std::optional<A> deduceA(unsigned int pos, B next)
-    {
-	std::optional<A> result;
-	if(indexB < m_b.size() && indexA+indexB == pos) {
-	    result = m_a[indexA];
-	}
-	indexB = indexA = 0;
-	return result;
-    }
-
     template<typename ...Args>
-    std::optional<A> deduceA(unsigned int pos, B next, Args... rest)
+    std::optional<A> _deduceA(len_t index, len_t indexA, len_t indexB, len_t goal,
+			     B value, Args... rest)
     {
-	if(indexB >= m_b.size() || indexB+indexA == pos) {
-	    indexB = indexA = 0;
+	if(indexB >= m_b.size() || index >= m_decoder.size()) {
 	    return {};
-	} else if(m_b[indexB] != next) {
-	    indexB = indexA = 0;
-	    return {};
-	} else {
-	    ++indexB;
-	    return deduceA(pos, rest...);
+	} else if(index == goal && _matches(index+1, indexA+1, indexB, value, rest...)) {
+	    return m_a[indexA];
+	} else if(index != goal && m_decoder[index] == 'b'
+		  && m_b[indexB] == value) {
+	    return _deduceA(index+1, indexA, indexB+1, goal, rest...);
 	}
-    }
-
-    template<typename ...Args>
-    std::optional<A> deduceA(unsigned int pos, A next, Args... rest)
-    {
-	if(indexA >= m_a.size()) {
-	    indexB = indexA = 0;
-	    return {};
-	} else if(indexA+indexB != pos && m_a[indexA] != next) {
-	    indexB = indexA = 0;
-	    return {};
-	}
-	if(indexA+indexB == pos) {
-	    std::optional<A> result = m_a[indexA++];
-	    if(matches(next, rest...)) {
-		return result;
-	    } else {
-		return {};
-	    }
-	}
-	++indexA;
-	return deduceA(pos, rest...);
-    }
-
-    std::optional<B> deduceB(const std::string decoder, unsigned int pos,
-			     va_list args)
-    {
-	if(decoder != m_decoder) {
-	    return {};
-	}
-	//Have to copy args since taking items out of args is destructive
-	va_list argsCopy;
-	va_copy(argsCopy, args);
-	int aCount = 0;
-	int bCount = 0;
-        std::optional<B> deducedVal;
-	for(unsigned int i=0; i<decoder.size(); ++i) {
-	    if(decoder[i] == 'a') {
-		if(i == pos) {;
-		    va_end(argsCopy);
-		    return {};
-		} else if(va_arg(argsCopy, A) != m_a[i-bCount]) {
-		    va_end(argsCopy);
-		    return {};
-		}
-		++aCount;
-	    } else {
-		if (i == pos) {
-		    deducedVal = m_b[i-aCount];
-		} else if(va_arg(argsCopy, B) != m_b[i-aCount]) {
-		    va_end(argsCopy);
-		    return {};
-		}
-		++bCount;
-	    }
-	}
-	va_end(argsCopy);
-	return deducedVal;
+	return {};
     }
 };
 
@@ -251,6 +222,7 @@ template<typename N, typename A, typename B>
 class Database {
     static_assert(!std::is_same<N,A>::value, "Name type must differ from A type");
     static_assert(!std::is_same<N,B>::value, "Name type must differ from B type");
+    using len_t = std::string::size_type;
 private:
     std::map<N,std::vector<Fact<A,B>*>> m_truths;
 
@@ -298,7 +270,7 @@ public:
     }
 
     template<typename ...Args>
-    std::optional<A> deduceA(const N truthName, unsigned int pos, Args... rest)
+    std::optional<A> deduceA(const N truthName, len_t pos, Args... rest)
     {
 	Fact<A,B> *fact = nullptr;
 	unsigned int index = 0;
@@ -313,24 +285,20 @@ public:
 	return result;
     }
 
-    /*B deduceB(const N truthName, const std::string decoder,
-	      unsigned int pos, ...)
+    /*template<typename ...Args>
+    std::optional<B> deduceB(const N truthName, unsigned int pos, Args... rest)
     {
-	va_list args;
-	va_start(args, pos);
-	Truth<A,B> *truth = nullptr;
+	Fact<A,B> *fact = nullptr;
 	unsigned int index = 0;
-	std::optional<B> deducedVal;
-	while((truth = getCandidates(index, truthName)) != nullptr) {
-	    deducedVal = truth->deduceB(decoder, pos, args);
-	    if(deducedVal.has_value()) {
-		va_end(args);
-		return *deducedVal;
+	std::optional<B> result;
+	while((fact = getCandidates(index, truthName)) != nullptr) {
+	    result = fact->deduceB(pos, rest...);
+	    if(result.has_value()) {
+		return result;
 	    }
 	    ++index;
 	}
-	va_end(args);
-	throw std::logic_error("deduceB: Could not find B to satisify arguments");
-    }*/
+	return result;
+	}*/
 };
 #endif

@@ -2,3 +2,5 @@
 *#
 backtrack
 examples/lookup
+.vscode/*
+*.dSYM/*
