@@ -69,9 +69,6 @@ int main()
     //Right now, only works with deducing arg of types within a Fact
     auto solution = db.deduceA(FactName::Orbits, 0, Star::Sun);
     std::cout << "Solution: " << (int)solution.value() << '\n';
-    auto solution1 = db.deduceA(FactName::InSolarSystem, 2, Planet::Venus, Planet::Mercury,
-				Planet::Earth);
-    std::cout << "Solution: " << (int)solution1.value() << '\n';
     //auto solution2 = db.deduceB(FactName::Orbits, 1, Planet::Venus);
     //std::cout << "Solution: " << (int)solution2.value() << '\n';
     return 0;

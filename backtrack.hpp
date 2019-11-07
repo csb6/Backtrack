@@ -99,19 +99,19 @@ private:
     using len_t = std::string::size_type;
 public:
     std::string m_decoder;
-    Fact(A value) { m_a.insert(m_a.begin(), value); m_decoder.insert(m_decoder.begin(), 'a'); }
-    Fact(B value) { m_b.insert(m_b.begin(), value); m_decoder.insert(m_decoder.begin(), 'b'); }
+    explicit Fact(A value) { m_a.insert(m_a.begin(), value); m_decoder = "a" + m_decoder; }
+    explicit Fact(B value) { m_b.insert(m_b.begin(), value); m_decoder = "b" + m_decoder; }
     template<typename ...Args>
-    Fact(A value, Args... rest) : Fact<A,B>(rest...)
+    explicit Fact(A value, Args... rest) : Fact<A,B>(rest...)
     {
 	m_a.insert(m_a.begin(), value);
-	m_decoder.insert(m_decoder.begin(), 'a');
+	m_decoder = "a" + m_decoder;
     }
     template<typename ...Args>
-    Fact(B value, Args... rest) : Fact<A,B>(rest...)
+    explicit Fact(B value, Args... rest) : Fact<A,B>(rest...)
     {
 	m_b.insert(m_b.begin(), value);
-	m_decoder.insert(m_decoder.begin(), 'b');
+	m_decoder = "b" + m_decoder;
     }
 
     template<typename ...Args>
@@ -120,8 +120,7 @@ public:
 	return _matches(0, 0, 0, rest...);
     }
 
-    bool _matches(len_t index, len_t indexA, len_t indexB,
-		 A value)
+    bool _matches(len_t index, len_t indexA, len_t, A value)
     {
 	if(indexA >= m_a.size() || index != m_decoder.size()-1) {
 	    return false;
@@ -130,8 +129,7 @@ public:
 	}
 	return false;
     }
-    bool _matches(len_t index, len_t indexA, len_t indexB,
-		 B value)
+    bool _matches(len_t index, len_t, len_t indexB, B value)
     {
 	if(indexB >= m_b.size() || index != m_decoder.size()-1) {
 	    return false;
@@ -168,12 +166,11 @@ public:
     {
 	return _deduceA(0, 0, 0, goal, rest...);
     }
-    std::optional<A> _deduceA(len_t index, len_t indexA, len_t indexB, len_t goal,
-			     A value)
+    std::optional<A> _deduceA(len_t index, len_t indexA, len_t, len_t goal, A value)
     {
 	if(indexA >= m_a.size() || index != m_decoder.size()-2) {
 	    return {};
-	} else if(index == goal && m_a[indexA] == value) {
+	} else if(index == goal && m_a[indexA+1] == value) {
 	    return m_a[indexA];
 	}
 	return {};

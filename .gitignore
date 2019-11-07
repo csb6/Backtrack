@@ -4,3 +4,5 @@ backtrack
 examples/lookup
 .vscode/*
 *.dSYM/*
+test-core.o
+test
