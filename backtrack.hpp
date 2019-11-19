@@ -119,97 +119,90 @@ public:
     {
 	return _matches(0, 0, 0, rest...);
     }
+private:
+    template<typename T, typename ...Args>
+    bool _matches(len_t index, len_t indexA, len_t indexB, T value, Args... rest)
+    {
+	static_assert(std::is_convertible<T, A>::value || std::is_convertible<T, B>::value);
+	if constexpr(std::is_convertible<T, A>::value) {
+	    if(indexA < m_a.size() && index < m_decoder.size()
+	       && m_decoder[index] == 'a' && m_a[indexA] == value) {
+		return _matches(index+1, indexA+1, indexB, rest...);
+	    }
+	} else {
+	    if(indexB < m_b.size() && index < m_decoder.size()
+	       && m_decoder[index] == 'b' && m_b[indexB] == value) {
+		return _matches(index+1, indexA, indexB+1, rest...);
+	    }
+	}
+	return false;
+    }
 
-    bool _matches(len_t index, len_t indexA, len_t, A value)
+    template<typename T>
+    bool _matches(len_t index, len_t indexA, len_t indexB, T value)
     {
-	if(indexA >= m_a.size() || index != m_decoder.size()-1) {
-	    return false;
-	} else if(m_a[indexA] == value) {
-	    return true;
+	static_assert(std::is_convertible<T, A>::value || std::is_convertible<T, B>::value);
+	if constexpr(std::is_convertible<T, A>::value) {
+	    if(indexA < m_a.size() && index == m_decoder.size()-1
+	       && m_a[indexA] == value) {
+		return true;
+	    }
+	} else {
+	    if(indexB < m_b.size() && index == m_decoder.size()-1
+	       && m_b[indexB] == value) {
+		return true;
+	    }
 	}
 	return false;
     }
-    bool _matches(len_t index, len_t, len_t indexB, B value)
-    {
-	if(indexB >= m_b.size() || index != m_decoder.size()-1) {
-	    return false;
-	} else if(m_b[indexB] == value) {
-	    return true;
-	}
-	return false;
-    }
-    template<typename ...Args>
-    bool _matches(len_t index, len_t indexA, len_t indexB,
-		 A value, Args... rest)
-    {
-	if(indexA >= m_a.size() || index >= m_decoder.size()) {
-	    return false;
-	} else if(m_decoder[index] == 'a' && m_a[indexA] == value) {
-	    return _matches(index+1, indexA+1, indexB, rest...);
-	}
-	return false;
-    }
-    template<typename ...Args>
-    bool _matches(len_t index, len_t indexA, len_t indexB,
-		 B value, Args... rest)
-    {
-	if(indexB >= m_b.size() || index >= m_decoder.size()) {
-	    return false;
-	} else if(m_decoder[index] == 'b' && m_b[indexB] == value) {
-	    return _matches(index+1, indexA, indexB+1, rest...);
-	}
-	return false;
-    }
-    
+public:
     template<typename ...Args>
     std::optional<A> deduceA(len_t goal, Args... rest)
     {
 	return _deduceA(0, 0, 0, goal, rest...);
     }
-    std::optional<A> _deduceA(len_t index, len_t indexA, len_t, len_t goal, A value)
+private:
+    template<typename T>
+    std::optional<A> _deduceA(len_t index, len_t indexA, len_t indexB, len_t goal,
+			      T value)
     {
-	if(indexA >= m_a.size() || index != m_decoder.size()-2) {
-	    return {};
-	} else if(index == goal && m_a[indexA+1] == value) {
-	    return m_a[indexA];
+	static_assert(std::is_convertible<T, A>::value || std::is_convertible<T, B>::value);
+	if constexpr(std::is_convertible<T, A>::value) {
+	    if(indexA < m_a.size() && index != m_decoder.size()-2
+	       &&index == goal && m_a[indexA+1] == value) {
+		return m_a[indexA];
+	    }
+	} else {
+	    if(indexB < m_b.size() && index == m_decoder.size()-2
+	       && index == goal && m_b[indexB] == value) {
+		return m_a[indexA];
+	    }
 	}
 	return {};
     }
+    template<typename T, typename ...Args>
     std::optional<A> _deduceA(len_t index, len_t indexA, len_t indexB, len_t goal,
-			     B value)
+			      T value, Args... rest)
     {
-	if(indexB >= m_b.size() || index != m_decoder.size()-2) {
-	    return {};
-	} else if(index == goal && m_b[indexB] == value) {
-	    return m_a[indexA];
-	}
-	return {};
-    }
-    template<typename ...Args>
-    std::optional<A> _deduceA(len_t index, len_t indexA, len_t indexB, len_t goal,
-			     A value, Args... rest)
-    {
-	if(indexA >= m_a.size() || index >= m_decoder.size()) {
-	    return {};
-	} else if(index == goal && _matches(index+1, indexA+1, indexB, value, rest...)) {
-	    return m_a[indexA];
-	} else if(index != goal && m_decoder[index] == 'a'
-		  && m_a[indexA] == value) {
-	    return _deduceA(index+1, indexA+1, indexB, goal, rest...);
-	}
-	return {};
-    }
-    template<typename ...Args>
-    std::optional<A> _deduceA(len_t index, len_t indexA, len_t indexB, len_t goal,
-			     B value, Args... rest)
-    {
-	if(indexB >= m_b.size() || index >= m_decoder.size()) {
-	    return {};
-	} else if(index == goal && _matches(index+1, indexA+1, indexB, value, rest...)) {
-	    return m_a[indexA];
-	} else if(index != goal && m_decoder[index] == 'b'
-		  && m_b[indexB] == value) {
-	    return _deduceA(index+1, indexA, indexB+1, goal, rest...);
+	static_assert(std::is_convertible<T, A>::value || std::is_convertible<T, B>::value);
+	if constexpr(std::is_convertible<T, A>::value) {
+	    if(indexA >= m_a.size() || index >= m_decoder.size()) {
+		return {};
+	    } else if(index == goal && _matches(index+1, indexA+1, indexB, value, rest...)) {
+		return m_a[indexA];
+	    } else if(index != goal && m_decoder[index] == 'a'
+		      && m_a[indexA] == value) {
+		return _deduceA(index+1, indexA+1, indexB, goal, rest...);
+	    }
+	} else {
+	    if(indexB >= m_b.size() || index >= m_decoder.size()) {
+		return {};
+	    } else if(index == goal && _matches(index+1, indexA+1, indexB, value, rest...)) {
+		return m_a[indexA];
+	    } else if(index != goal && m_decoder[index] == 'b'
+		      && m_b[indexB] == value) {
+		return _deduceA(index+1, indexA, indexB+1, goal, rest...);
+	    }
 	}
 	return {};
     }
@@ -219,6 +212,8 @@ template<typename N, typename A, typename B>
 class Database {
     static_assert(!std::is_same<N,A>::value, "Name type must differ from A type");
     static_assert(!std::is_same<N,B>::value, "Name type must differ from B type");
+    static_assert(!std::is_convertible<A,B>::value,
+		  "A and B cannot be implicitly convertible");
     using len_t = std::string::size_type;
 private:
     std::map<N,std::vector<Fact<A,B>*>> m_truths;
