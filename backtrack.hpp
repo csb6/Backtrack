@@ -30,6 +30,7 @@
 #include <functional>
 #include <string>
 #include <optional>
+#include <variant>
 
 /*template<typename A, typename B>
 class Truth {
@@ -94,117 +95,78 @@ public:
 template<typename A, typename B>
 class Fact {
 private:
-    std::vector<A> m_a;
-    std::vector<B> m_b;
     using len_t = std::string::size_type;
+    std::vector<std::variant<A,B>> m_values;
 public:
-    std::string m_decoder;
-    explicit Fact(A value) { m_a.insert(m_a.begin(), value); m_decoder = "a" + m_decoder; }
-    explicit Fact(B value) { m_b.insert(m_b.begin(), value); m_decoder = "b" + m_decoder; }
+    explicit Fact(A value) { m_values.insert(m_values.begin(), {value}); }
+    explicit Fact(B value) { m_values.insert(m_values.begin(), {value}); }
+    
     template<typename ...Args>
     explicit Fact(A value, Args... rest) : Fact<A,B>(rest...)
     {
-	m_a.insert(m_a.begin(), value);
-	m_decoder = "a" + m_decoder;
+	m_values.insert(m_values.begin(), {value});
     }
+    
     template<typename ...Args>
     explicit Fact(B value, Args... rest) : Fact<A,B>(rest...)
     {
-	m_b.insert(m_b.begin(), value);
-	m_decoder = "b" + m_decoder;
+	m_values.insert(m_values.begin(), {value});
     }
 
     template<typename ...Args>
     bool matches(Args... rest)
     {
-	return _matches(0, 0, 0, rest...);
+	return _matches(0, rest...);
+    }
+    template<typename Missing, typename ...Args>
+    std::optional<Missing> deduce(len_t missingPos, Args... rest)
+    {
+	return _deduce<Missing>(missingPos, 0, rest...);
     }
 private:
     template<typename T, typename ...Args>
-    bool _matches(len_t index, len_t indexA, len_t indexB, T value, Args... rest)
+    bool _matches(len_t pos, T value, Args... rest)
     {
-	static_assert(std::is_convertible<T, A>::value || std::is_convertible<T, B>::value);
-	if constexpr(std::is_convertible<T, A>::value) {
-	    if(indexA < m_a.size() && index < m_decoder.size()
-	       && m_decoder[index] == 'a' && m_a[indexA] == value) {
-		return _matches(index+1, indexA+1, indexB, rest...);
-	    }
-	} else {
-	    if(indexB < m_b.size() && index < m_decoder.size()
-	       && m_decoder[index] == 'b' && m_b[indexB] == value) {
-		return _matches(index+1, indexA, indexB+1, rest...);
-	    }
-	}
-	return false;
+        return (pos < m_values.size())
+	    && std::holds_alternative<T>(m_values[pos])
+	    && std::get<T>(m_values[pos]) == value
+	    && _matches(pos+1, rest...);
+    }
+    template<typename T>
+    bool _matches(len_t pos, T value)
+    {
+	return (pos < m_values.size())
+	    && std::holds_alternative<T>(m_values[pos])
+	    && std::get<T>(m_values[pos]) == value
+	    && pos == m_values.size()-1;
     }
 
-    template<typename T>
-    bool _matches(len_t index, len_t indexA, len_t indexB, T value)
+    template<typename Missing, typename T, typename ...Args>
+    std::optional<Missing> _deduce(len_t missingPos, len_t pos, T value,
+				   Args... rest)
     {
-	static_assert(std::is_convertible<T, A>::value || std::is_convertible<T, B>::value);
-	if constexpr(std::is_convertible<T, A>::value) {
-	    if(indexA < m_a.size() && index == m_decoder.size()-1
-	       && m_a[indexA] == value) {
-		return true;
-	    }
+	if(missingPos == pos && _matches(pos+1, value, rest...)
+	   && std::holds_alternative<Missing>(m_values[missingPos])) {
+	    return {std::get<Missing>(m_values[pos])};
+        } else if(pos < missingPos && (pos < m_values.size())
+		  && std::holds_alternative<T>(m_values[pos])
+		  && std::get<T>(m_values[pos]) == value) {
+	    return _deduce<Missing>(missingPos, pos+1, rest...);
 	} else {
-	    if(indexB < m_b.size() && index == m_decoder.size()-1
-	       && m_b[indexB] == value) {
-		return true;
-	    }
+	    return {};
 	}
-	return false;
     }
-public:
-    template<typename ...Args>
-    std::optional<A> deduceA(len_t goal, Args... rest)
+
+    template<typename Missing, typename T>
+    std::optional<Missing> _deduce(len_t missingPos, len_t pos, T value)
     {
-	return _deduceA(0, 0, 0, goal, rest...);
-    }
-private:
-    template<typename T>
-    std::optional<A> _deduceA(len_t index, len_t indexA, len_t indexB, len_t goal,
-			      T value)
-    {
-	static_assert(std::is_convertible<T, A>::value || std::is_convertible<T, B>::value);
-	if constexpr(std::is_convertible<T, A>::value) {
-	    if(indexA < m_a.size() && index != m_decoder.size()-2
-	       &&index == goal && m_a[indexA+1] == value) {
-		return m_a[indexA];
-	    }
+	if(missingPos == pos && missingPos == m_values.size()-2
+	   && _matches(pos+1, value)
+	   && std::holds_alternative<Missing>(m_values[missingPos])) {
+	    return {std::get<Missing>(m_values[pos])};
 	} else {
-	    if(indexB < m_b.size() && index == m_decoder.size()-2
-	       && index == goal && m_b[indexB] == value) {
-		return m_a[indexA];
-	    }
+	    return {};
 	}
-	return {};
-    }
-    template<typename T, typename ...Args>
-    std::optional<A> _deduceA(len_t index, len_t indexA, len_t indexB, len_t goal,
-			      T value, Args... rest)
-    {
-	static_assert(std::is_convertible<T, A>::value || std::is_convertible<T, B>::value);
-	if constexpr(std::is_convertible<T, A>::value) {
-	    if(indexA >= m_a.size() || index >= m_decoder.size()) {
-		return {};
-	    } else if(index == goal && _matches(index+1, indexA+1, indexB, value, rest...)) {
-		return m_a[indexA];
-	    } else if(index != goal && m_decoder[index] == 'a'
-		      && m_a[indexA] == value) {
-		return _deduceA(index+1, indexA+1, indexB, goal, rest...);
-	    }
-	} else {
-	    if(indexB >= m_b.size() || index >= m_decoder.size()) {
-		return {};
-	    } else if(index == goal && _matches(index+1, indexA+1, indexB, value, rest...)) {
-		return m_a[indexA];
-	    } else if(index != goal && m_decoder[index] == 'b'
-		      && m_b[indexB] == value) {
-		return _deduceA(index+1, indexA, indexB+1, goal, rest...);
-	    }
-	}
-	return {};
     }
 };
 
@@ -261,14 +223,16 @@ public:
 	return false;
     }
 
-    template<typename ...Args>
-    std::optional<A> deduceA(const N truthName, len_t pos, Args... rest)
+    template<typename T, typename ...Args>
+    std::optional<T> deduce(const N truthName, len_t pos, Args... rest)
     {
+	static_assert(std::is_same<T,A>::value || std::is_same<T,B>::value,
+		      "Type being deduced must be same as type A or B");
 	Fact<A,B> *fact = nullptr;
 	unsigned int index = 0;
-	std::optional<A> result;
+	std::optional<T> result;
 	while((fact = getCandidates(index, truthName)) != nullptr) {
-	    result = fact->deduceA(pos, rest...);
+	    result = fact->template deduce<T>(pos, rest...);
 	    if(result.has_value()) {
 		return result;
 	    }

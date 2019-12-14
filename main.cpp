@@ -14,18 +14,11 @@ enum class Star {
     Sun, AlphaCentauri
 };
 
-template<typename... Types>
-bool matches(std::tuple<Types...> a, std::tuple<Types...> b)
-{
-    return a == b;
-}
-
 int main()
 {
     Database<FactName, Planet, Star> db;
 
-    Fact<int,std::string> a(2, "hey bro", 5, 6, "9");
-    std::cout << "Decoder: " << a.m_decoder << '\n';
+    Fact<int,const char*> a(2, "hey bro", 5, 6, "9");
     std::cout << "Fact matches? " << a.matches(2, "hey bro", 5, 6, "9") << '\n';
     //std::optional<int> missing = a.deduceA(2, 2, "hey bro", 6, "9").value_or(-1);
     //std::cout << "Item at pos 2 (-1 means error): " << *missing << '\n'; 
@@ -67,9 +60,9 @@ int main()
 			   Planet::Mercury, Planet::Mars, Planet::Earth) << '\n';
     std::cout << db.isTrue(FactName::Orbits, Star::Sun) << '\n';
     //Right now, only works with deducing arg of types within a Fact
-    auto solution = db.deduceA(FactName::Orbits, 0, Star::Sun);
+    auto solution = db.deduce<Planet>(FactName::Orbits, 0, Star::Sun);
     std::cout << "Solution: " << (int)solution.value() << '\n';
-    //auto solution2 = db.deduceB(FactName::Orbits, 1, Planet::Venus);
+    //auto solution2 = db.deduce<Star>(FactName::Orbits, 1, Planet::Venus);
     //std::cout << "Solution: " << (int)solution2.value() << '\n';
     return 0;
 }
