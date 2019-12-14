@@ -160,8 +160,19 @@ private:
     template<typename Missing, typename T>
     std::optional<Missing> _deduce(len_t missingPos, len_t pos, T value)
     {
-	if(missingPos == pos && missingPos == m_values.size()-2
+	if(missingPos == pos
 	   && _matches(pos+1, value)
+	   && std::holds_alternative<Missing>(m_values[missingPos])) {
+	    return {std::get<Missing>(m_values[pos])};
+	} else {
+	    return _deduce<Missing>(missingPos, pos+1);
+	}
+    }
+
+    template<typename Missing>
+    std::optional<Missing> _deduce(len_t missingPos, len_t pos)
+    {
+	if(missingPos == pos
 	   && std::holds_alternative<Missing>(m_values[missingPos])) {
 	    return {std::get<Missing>(m_values[pos])};
 	} else {
@@ -240,21 +251,5 @@ public:
 	}
 	return result;
     }
-
-    /*template<typename ...Args>
-    std::optional<B> deduceB(const N truthName, unsigned int pos, Args... rest)
-    {
-	Fact<A,B> *fact = nullptr;
-	unsigned int index = 0;
-	std::optional<B> result;
-	while((fact = getCandidates(index, truthName)) != nullptr) {
-	    result = fact->deduceB(pos, rest...);
-	    if(result.has_value()) {
-		return result;
-	    }
-	    ++index;
-	}
-	return result;
-	}*/
 };
 #endif
