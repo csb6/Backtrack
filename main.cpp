@@ -1,3 +1,12 @@
+/*TODO
+[ ] Add some sort of logging mechanism so I can see which Fact/Rules are
+    considered and rejected, along with each of these overloads' type signatures
+[ ] Add support for some sort of lombda function for Rules so that arbitrary C++
+    code can be run as part of the program
+[ ] Add support for Rules within the Database, maybe in a separate collection
+    from facts or maybe in the same collection, using std::variant
+[ ] Add support for basic backtracking between Facts and Rules
+*/
 #include "backtrack.hpp"
 #include <iostream>
 #include <cstdint> // for std::int_least16_t
@@ -31,15 +40,15 @@ int main()
 	   new Fact<Planet,Star>(Planet::Venus, Planet::Mercury, Planet::Mars,
 				 Planet::Earth));
 
-    
-    std::cout << db.isTrue(FactName::Orbits, Planet::Earth, Star::Sun) << '\n';
-    std::cout << db.isTrue(FactName::Truth, Planet::Mercury, Star::Sun) << '\n';
-    std::cout << db.isTrue(FactName::Orbits, Planet::Venus, Star::AlphaCentauri)
+
+    std::cout << db(FactName::Orbits, Planet::Earth, Star::Sun) << '\n';
+    std::cout << db(FactName::Truth, Planet::Mercury, Star::Sun) << '\n';
+    std::cout << db(FactName::Orbits, Planet::Venus, Star::AlphaCentauri)
 	      << '\n';
-    std::cout << db.isTrue(FactName::Orbits, Star::Sun, Planet::Earth) << '\n';
-    std::cout << db.isTrue(FactName::InSolarSystem, Planet::Venus,
+    std::cout << db(FactName::Orbits, Star::Sun, Planet::Earth) << '\n';
+    std::cout << db(FactName::InSolarSystem, Planet::Venus,
 			   Planet::Mercury, Planet::Mars, Planet::Earth) << '\n';
-    std::cout << db.isTrue(FactName::Orbits, Star::Sun) << '\n';
+    std::cout << db(FactName::Orbits, Star::Sun) << '\n';
     //Right now, only works with deducing arg of types within a Fact
     auto solution = db.deduce<Planet>(FactName::Orbits, 0, Star::Sun);
     std::cout << "Solution: " << (int)solution.value() << '\n';
@@ -51,6 +60,6 @@ int main()
     std::cout << "Rule matches? "
 	      << rule1.matches(Planet::Earth, Star::Sun, Planet::Earth,
 			       Planet::Mars) << '\n';
-    
+
     return 0;
 }

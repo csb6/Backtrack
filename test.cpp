@@ -5,7 +5,7 @@ enum class FactName {
     A, B, C, D
 };
 
-TEST_CASE("db.isTrue()") {
+TEST_CASE("Fact matching tests") {
     Database<FactName,int,const char*> db;
     db.add(FactName::C, new Fact<int,const char*>(7));
     db.add(FactName::D, new Fact<int,const char*>("yoyoyo"));
@@ -17,32 +17,32 @@ TEST_CASE("db.isTrue()") {
 						  8, "amigo", 45, 67, "", 8));
 
     SECTION("Correct Match") {
-	REQUIRE(db.isTrue(FactName::A, 1, "Hey there"));
-	REQUIRE(db.isTrue(FactName::A, 1, "Boo yeah!"));
-	REQUIRE(db.isTrue(FactName::A, 2, "Hey there!"));
-	REQUIRE(db.isTrue(FactName::B,"hey", "how", "are", "you", 78, "doing", 89, 67,
+	REQUIRE(db(FactName::A, 1, "Hey there"));
+	REQUIRE(db(FactName::A, 1, "Boo yeah!"));
+	REQUIRE(db(FactName::A, 2, "Hey there!"));
+	REQUIRE(db(FactName::B,"hey", "how", "are", "you", 78, "doing", 89, 67,
 			  "my", "number", 8, "amigo", 45, 67, "", 8));
-	REQUIRE(db.isTrue(FactName::C, 7));
-	REQUIRE(db.isTrue(FactName::D, "yoyoyo"));
+	REQUIRE(db(FactName::C, 7));
+	REQUIRE(db(FactName::D, "yoyoyo"));
     }
 
     SECTION("Mismatches") {
-	REQUIRE(!db.isTrue(FactName::A, 1));
-	REQUIRE(!db.isTrue(FactName::A, "Boo yeah!"));
-	REQUIRE(!db.isTrue(FactName::B, 1, "Hey there"));
-	REQUIRE(!db.isTrue(FactName::B,"hey", "how", "are", "you", 78, "doing", 89, 67,
+	REQUIRE(!db(FactName::A, 1));
+	REQUIRE(!db(FactName::A, "Boo yeah!"));
+	REQUIRE(!db(FactName::B, 1, "Hey there"));
+	REQUIRE(!db(FactName::B,"hey", "how", "are", "you", 78, "doing", 89, 67,
 			   "my", "number", 8, "amigo", 45, 67, ""));
-	REQUIRE(!db.isTrue(FactName::B,"hey", "how", "are", "you", 78, "doing", 89, 67,
+	REQUIRE(!db(FactName::B,"hey", "how", "are", "you", 78, "doing", 89, 67,
 			   "my", "number", 8, "amigo", 45, 67, 8));
-	REQUIRE(!db.isTrue(FactName::B, "how", "are", "you", 78, "doing", 89, 67,
+	REQUIRE(!db(FactName::B, "how", "are", "you", 78, "doing", 89, 67,
 			   "my", "number", 8, "amigo", 45, 67, "", 8));
-	REQUIRE(!db.isTrue(FactName::A, "hey"));
-	REQUIRE(!db.isTrue(FactName::C, 1));
-	REQUIRE(!db.isTrue(FactName::D, "yoyoy"));
+	REQUIRE(!db(FactName::A, "hey"));
+	REQUIRE(!db(FactName::C, 1));
+	REQUIRE(!db(FactName::D, "yoyoy"));
     }
 }
 
-TEST_CASE("db.deduce() for type A") {
+TEST_CASE("Deducing Type A Tests") {
     Database<FactName,int,const char*> db;
     db.add(FactName::C, new Fact<int,const char*>(7));
     db.add(FactName::D, new Fact<int,const char*>("yoyoyo"));
@@ -73,7 +73,7 @@ TEST_CASE("db.deduce() for type A") {
     }
 }
 
-TEST_CASE("db.deduce() for type B") {
+TEST_CASE("Deducing Type B Tests") {
     Database<FactName,int,const char*> db;
     db.add(FactName::A, new Fact<int,const char*>(65, 89, "yoyoyo", "", "", 8, 9, " "));
     db.add(FactName::A, new Fact<int,const char*>(65, 89, "yoyoyo", "", "", 8, 9, ""));
