@@ -26,11 +26,12 @@
 #include <vector>
 #include <map>
 #include <type_traits> // for std::is_same
-#include <cstdarg> // for ellipsis
 #include <functional>
 #include <string>
 #include <optional>
 #include <variant>
+#include <utility> // for std::forward
+#include <exception>
 
 /*template<typename A, typename B>
 class Truth {
@@ -47,50 +48,7 @@ public:
     virtual std::optional<B> deduceB(const std::string decoder, unsigned int pos,
 				     va_list args) = 0;
     virtual ~Truth() {};
-};
-
-template<typename A, typename B>
-class Rule : public Truth<A,B> {
-private:
-    const std::string m_decoder;
-    std::function<bool(std::string,va_list)> m_pred;
-public:
-    Rule(const std::string decoder, std::function<bool(std::string,va_list)> pred)
-	: m_decoder(decoder), m_pred(pred)
-    {}
-
-    virtual bool matches(A value) override { return false; }
-    virtual bool matches(B value) override { return false; }
-    
-    template<typename ...Args>
-    virtual bool matches(A value, Args... rest) override
-    {
-	if(decoder != m_decoder) {
-	    return false;
-	}
-	//Have to copy args since taking items out of args is destructive
-	va_list argsCopy;
-	va_copy(argsCopy, args);
-        bool result = m_pred(decoder, argsCopy);
-	va_end(argsCopy);
-	return result;
-    }
-
-    template<typename ...Args>
-    virtual bool matches(B value, Args... rest) { return false; }
-
-    virtual std::optional<A> deduceA(const std::string decoder, unsigned int pos,
-				     va_list args) override
-    {
-	return {};
-    }
-
-    virtual std::optional<B> deduceB(const std::string decoder, unsigned int pos,
-				     va_list args) override
-    {
-	return {};
-    }
-};*/
+    };*/
 
 template<typename A, typename B>
 class Fact {
@@ -178,6 +136,56 @@ private:
 	} else {
 	    return {};
 	}
+    }
+};
+
+template<typename A, typename B>
+class Rule {
+private:
+    using len_t = std::string::size_type;
+    std::vector<std::variant<A*,B*>> m_args;
+    bool m_is_init = false;
+public:
+    template<typename ...Args>
+    void init()
+    {
+	// All rules MUST be init-ed before use
+	(add_arg<Args>(), ...);
+	m_is_init = true;
+    }
+    
+    template<typename ...Args>
+    bool matches(Args... rest)
+    {
+	if(m_is_init) {
+	    return _matches(0, rest...);
+	} else {
+	    throw std::runtime_error("Error: did not init Rule");
+	}
+    }
+private:
+    template<typename T>
+    void add_arg()
+    {
+	static_assert(std::is_same<T, A>::value || std::is_same<T, B>::value,
+		      "Types within Rules must be of type A or type B");
+	T *placeholder = nullptr;
+	m_args.push_back({placeholder});
+    }
+    
+    template<typename T, typename ...Args>
+    bool _matches(len_t pos, T, Args... rest)
+    {
+        return (pos < m_args.size())
+	    && std::holds_alternative<T*>(m_args[pos])
+	    && _matches(pos+1, rest...);
+    }
+    template<typename T>
+    bool _matches(len_t pos, T)
+    {
+	return (pos < m_args.size())
+	    && std::holds_alternative<T*>(m_args[pos])
+	    && pos == m_args.size()-1;
     }
 };
 

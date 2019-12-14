@@ -45,6 +45,12 @@ int main()
     std::cout << "Solution: " << (int)solution.value() << '\n';
     auto solution2 = db.deduce<Star>(FactName::Orbits, 1, Planet::Venus);
     std::cout << "Solution: " << (int)solution2.value() << '\n';
+
+    Rule<Planet, Star> rule1;
+    rule1.init<Planet, Star, Planet, Planet>();
+    std::cout << "Rule matches? "
+	      << rule1.matches(Planet::Earth, Star::Sun, Planet::Earth,
+			       Planet::Mars) << '\n';
     
     return 0;
 }

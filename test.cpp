@@ -42,7 +42,7 @@ TEST_CASE("db.isTrue()") {
     }
 }
 
-TEST_CASE("db.deduceA()") {
+TEST_CASE("db.deduce() for type A") {
     Database<FactName,int,const char*> db;
     db.add(FactName::C, new Fact<int,const char*>(7));
     db.add(FactName::D, new Fact<int,const char*>("yoyoyo"));
@@ -70,5 +70,21 @@ TEST_CASE("db.deduceA()") {
 	REQUIRE(!db.deduce<int>(FactName::B, 4, "hey", "how", "are", "you", "doing", 89, 67,
 			    "my", "number", 8, "amigo", 45, 67, "").has_value());
 	REQUIRE(!db.deduce<int>(FactName::B, 4, "hey", "how", "are", "you", "doing").has_value());
+    }
+}
+
+TEST_CASE("db.deduce() for type B") {
+    Database<FactName,int,const char*> db;
+    db.add(FactName::A, new Fact<int,const char*>(65, 89, "yoyoyo", "", "", 8, 9, " "));
+    db.add(FactName::A, new Fact<int,const char*>(65, 89, "yoyoyo", "", "", 8, 9, ""));
+    db.add(FactName::B, new Fact<int,const char*>(98, 7));
+
+    SECTION("AABBBAAB, deduce at index 2") {
+	auto val = db.deduce<const char*>(FactName::A, 2, 65, 89, "", "", 8, 9, " ");
+	REQUIRE(val.has_value());
+	REQUIRE(val == "yoyoyo");
+	REQUIRE(!db.deduce<const char*>(FactName::A, 2, 65, 89, "", "", 8, 9));
+	REQUIRE(!db.deduce<const char*>(FactName::A, 2, 65, 89, "", "", 8, 9, "nope"));
+	REQUIRE(!db.deduce<const char*>(FactName::B, 2, 65, 89, "", "", 8, 9, " "));
     }
 }
