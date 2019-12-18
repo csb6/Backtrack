@@ -56,10 +56,10 @@ int main()
     std::cout << "Solution: " << (int)solution2.value() << '\n';
 
     Rule<Planet, Star> rule1;
-    rule1.init<Planet, Star, Planet, Planet>();
-    std::cout << "Rule matches? "
-	      << rule1.matches(Planet::Earth, Star::Sun, Planet::Earth,
-			       Planet::Mars) << '\n';
+    rule1.init(*[](Planet a, Planet b) {
+		    return a < b;
+		});
+    std::cout << rule1(Planet::Mars, Planet::Earth) << '\n';
 
     return 0;
 }

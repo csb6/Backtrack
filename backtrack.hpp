@@ -20,6 +20,7 @@
 #include <functional>
 #include <string>
 #include <optional>
+#include <any>
 #include <variant>
 #include <utility> // for std::forward
 #include <exception>
@@ -135,15 +136,17 @@ class Rule {
 private:
     using len_t = std::string::size_type;
     std::vector<bool> m_args; // 1 means type A, 0 means type B
+    std::any m_func;
     bool m_is_init = false;
 public:
     template<typename ...Args>
-    void init()
+    void init(bool(*func)(Args...))
     {
+	(add_arg<Args>(), ...);
 	// All rules MUST be init-ed before use
 	// Can't use constructors because ...Args can't be inferred
 	// in the templated constructor of a template class
-	(add_arg<Args>(), ...);
+	m_func = func;
 	m_is_init = true;
     }
 
@@ -156,14 +159,25 @@ public:
 	    throw std::runtime_error("Error: did not init Rule");
 	}
     }
+
+    template<typename ...Args>
+    bool operator()(Args... inputs)
+    {
+	if(matches(inputs...)) {
+	    auto func(std::any_cast<bool(*)(Args...)>(m_func));
+	    return func(inputs...);
+	} else {
+	    return false;
+	}
+    }
 private:
     template<typename T>
     void add_arg()
     {
 	static_assert(std::is_same<T, A>::value || std::is_same<T, B>::value,
 		      "Types within Rules must be of type A or type B");
-        constexpr bool type = (std::is_same<T, A>::value) ? true : false;
-	m_args.push_back({type});
+        constexpr bool type = std::is_same<T, A>::value;
+	m_args.push_back(type);
     }
 
     template<typename T, typename ...Args>
@@ -171,7 +185,7 @@ private:
     {
 	static_assert(std::is_same<T, A>::value || std::is_same<T, B>::value,
 		      "Types within Rules must be of type A or type B");
-	constexpr bool type = (std::is_same<T, A>::value) ? true : false;
+	constexpr bool type = std::is_same<T, A>::value;
         return (pos < m_args.size())
 	    && m_args[pos] == type
 	    && _matches(pos+1, rest...);
@@ -181,7 +195,7 @@ private:
     {
 	static_assert(std::is_same<T, A>::value || std::is_same<T, B>::value,
 		      "Types within Rules must be of type A or type B");
-	constexpr bool type = (std::is_same<T, A>::value) ? true : false;
+	constexpr bool type = std::is_same<T, A>::value;
 	return (pos < m_args.size())
 	    && m_args[pos] == type
 	    && pos == m_args.size()-1;
@@ -197,35 +211,50 @@ class Database {
 		  "A and B cannot be implicitly convertible");
     using len_t = std::string::size_type;
 private:
-    std::unordered_map<N,std::vector<Fact<A,B>*>> m_truths;
+    std::unordered_map<N,std::vector<Fact<A,B>*>> m_facts;
+    std::unordered_map<N,std::vector<Rule<A,B>*>> m_rules;
 
     Fact<A,B>* getCandidates(unsigned int index, const N truthName)
     {
-	if(m_truths.find(truthName) == m_truths.end()
-	   || index >= m_truths[truthName].size()) {
+	if(m_facts.find(truthName) == m_facts.end()
+	   || index >= m_facts[truthName].size()) {
 	    // If key doesn't exist, fact can't be found
 	    return nullptr;
 	}
-	return m_truths[truthName][index];
+	return m_facts[truthName][index];
+    }
+    Rule<A,B>* getRuleCandidates(unsigned int index, const N ruleName)
+    {
+	if(m_rules.find(ruleName) == m_rules.end()
+	   || index >= m_rules[ruleName].size()) {
+	    // If key doesn't exist, fact can't be found
+	    return nullptr;
+	}
+	return m_facts[ruleName][index];
     }
 public:
     ~Database()
     {
-	for(auto &pair : m_truths) {
+	for(auto &pair : m_facts) {
 	    for(auto *truth : pair.second) {
 		delete truth;
+	    }
+	}
+	for(auto &pair : m_rules) {
+	    for(auto *rule : pair.second) {
+		delete rule;
 	    }
 	}
     }
 
     void add(const N factName, Fact<A,B> *fact)
     {
-	m_truths[factName].push_back(fact);
+	m_facts[factName].push_back(fact);
     }
 
     /*void add(const N ruleName, Rule<A,B> *pred)
     {
-	m_truths[ruleName].push_back(pred);
+	m_facts[ruleName].push_back(pred);
 	}*/
 
     template<typename ...Args>
