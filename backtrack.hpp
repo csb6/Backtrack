@@ -24,12 +24,18 @@
 class Expression {
 public:
     // `==` means "Can this expression unify with another?"
-    virtual bool operator==(const Expression &other) const = 0;
+    virtual bool operator==(const Expression &o) const = 0;
     bool operator!=(const Expression &other) const
     {
 	return !(*this == other);
     }
-    virtual bool operator()(std::vector<Expression> &args) = 0;
+    // This operator means: try to unify any of these arguments
+    // that you can; if you can't accept these args, return false
+    virtual bool operator()(std::vector<Expression*> &args) = 0;
+    // Has this Expression been unified yet?
+    virtual bool is_filled() const = 0;
+    // Change unification status of this Expression
+    virtual void set_filled(bool val) = 0;
     virtual ~Expression() {}
 };
 
@@ -42,21 +48,53 @@ private:
 public:
     explicit Atom() : m_is_filled(false)  {}
     explicit Atom(T value) : m_value(value)  {}
-    bool operator==(const Expression &other) const override
+    bool operator==(const Expression &o) const override
     {
+	auto &other = (const Atom<T>&)o;
 	return typeid(other) == typeid(Atom<T>)
-	    && (((const Atom<T>&)other).m_value == m_value
-		|| ((const Atom<T>&)other).m_is_filled != m_is_filled);
+	    && (other.m_value == m_value
+		|| other.m_is_filled != m_is_filled);
     }
-    bool operator()(std::vector<Expression> &args) override
+    bool operator()(std::vector<Expression*> &args) override
     {
-	if(args.size() != 1 || typeid(args[0]) != typeid(Atom<T>&)
-	   || ((Atom<T>&)args[0]).m_is_filled == m_is_filled)
+	auto &arg_ref{*args[0]};
+	if(args.size() != 1 || typeid(arg_ref) != typeid(Atom<T>&))
 	    return false;
-	((Atom<T>&)args[0]).m_value = m_value;
-	return true;
+	auto *arg = (Atom<T>*)args[0];
+	if(!arg->m_is_filled) {
+	    // If arg hasn't been unified, unify it with this object's value
+	    arg->m_value = m_value;
+	    arg->set_filled(true);
+	    return true;
+	} else {
+	    return arg->m_value == m_value;
+	}
     }
+    bool is_filled() const override { return m_is_filled; }
+    void set_filled(bool val) override { m_is_filled = val; }
+    T value() const { return m_value; }
 };
+
+
+std::vector<std::size_t> unfilled_positions(const std::vector<Expression*> &args)
+{
+    std::size_t i = 0;
+    std::vector<std::size_t> positions;
+    for(const auto *each : args) {
+        if(!each->is_filled())
+	    positions.push_back(i);
+	++i;
+    }
+    return positions;
+}
+
+void restore_unfilled(const std::vector<std::size_t> &positions,
+		      std::vector<Expression*> &args)
+{
+    for(auto pos : positions) {
+	args[pos]->set_filled(false);
+    }
+}
 
 
 class Fact : public Expression {
@@ -66,18 +104,31 @@ public:
     explicit Fact(std::initializer_list<Expression*> parts)
 	: m_parts(parts)
     {}
-    bool operator==(const Expression &other) const override
+    bool operator==(const Expression &o) const override
     {
+	auto &other = (const Fact&)o;
 	return typeid(other) == typeid(Fact)
-	    && ((const Fact&)other).m_parts == m_parts;
+	    && other.m_parts == m_parts;
     }
-    bool operator()(std::vector<Expression> &args) override
+    bool operator()(std::vector<Expression*> &args) override
     {
 	if(args.size() != m_parts.size())
 	    return false;
-        
-	return false;
+	
+	std::vector<std::size_t> unfilled = unfilled_positions(args);
+        for(std::size_t i = 0; i < m_parts.size(); ++i) {
+	    std::vector<Expression*> arg{args[i]};
+	    if(!(*m_parts[i])(arg)) {
+		// Undo any unifications done by the Expressions in
+		// m_parts
+		restore_unfilled(unfilled, args);
+		return false;
+	    }
+	}
+	return true;
     }
+    bool is_filled() const override { return true; }
+    void set_filled(bool) override {}
 };
 
 
@@ -94,7 +145,7 @@ public:
 	    && ((const Rule&)other).m_args == m_args
 	    && ((const Rule&)other).m_predicates == m_predicates;
     }
-    bool operator()(std::vector<Expression> &args) override
+    bool operator()(std::vector<Expression*> &args) override
     {
 	if(args.size() != m_args.size())
 	    return false;
@@ -107,6 +158,8 @@ public:
 	m_predicates.push_back((Expression*)part);
 	return *this;
     }
+    bool is_filled() const override { return true; }
+    void set_filled(bool) override {}
 };
 
 

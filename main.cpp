@@ -87,11 +87,20 @@ int main()
     }
 
     {
-	Database<std::string> db;
-	Atom joe("joe");
-	Atom jeff("jeff");
-	Fact f{&joe, &jeff};
-	db.add("parent", &f);
+        Atom<int> a(1);
+	Atom<int> b;
+	Atom<int> c(3);
+
+	Atom<int> a1(1);
+	Atom<int> b1(2);
+	Atom<int> c1(3);
+	Fact add{&a1, &b1, &c1};
+	std::vector<Expression*> input{&a, &b, &c};
+        add(input);
+	if(b.is_filled())
+	    std::cout << b.value() << '\n';
+	else
+	    std::cout << "false\n";
     }
 
     return 0;
