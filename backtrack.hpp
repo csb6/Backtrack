@@ -14,279 +14,121 @@
      between 2 or more values. To add a Fact to a Database instance, use
      `db.add(factName, new Fact<A,B>(arg0, arg1, ..., argn))`.
 */
+#include <map>
 #include <vector>
-#include <unordered_map>
-#include <type_traits> // for std::is_same
-#include <functional>
-#include <string>
-#include <optional>
+#include <typeinfo>
 #include <any>
-#include <variant>
-#include <utility> // for std::forward
-#include <exception>
+#include <utility>
+#include <initializer_list>
 
-/*template<typename A, typename B>
-class Truth {
-     static_assert(!std::is_same<A,B>::value, "A and B must be different types");
+class Expression {
 public:
-    virtual bool matches(A value) = 0;
-    virtual bool matches(B value) = 0;
-    template<typename ...Args>
-    virtual bool matches(A value, Args... rest) = 0;
-    template<typename ...Args>
-    virtual bool matches(B value, Args... rest) = 0;
-    virtual std::optional<A> deduceA(const std::string decoder, unsigned int pos,
-				     va_list args) = 0;
-    virtual std::optional<B> deduceB(const std::string decoder, unsigned int pos,
-				     va_list args) = 0;
-    virtual ~Truth() {};
-    };*/
-
-template<typename A, typename B>
-class Fact {
-private:
-    using len_t = std::string::size_type;
-    std::vector<std::variant<A,B>> m_values;
-public:
-    explicit Fact(A value) { m_values.insert(m_values.begin(), {value}); }
-    explicit Fact(B value) { m_values.insert(m_values.begin(), {value}); }
-
-    template<typename ...Args>
-    explicit Fact(A value, Args... rest) : Fact<A,B>(rest...)
+    // `==` means "Can this expression unify with another?"
+    virtual bool operator==(const Expression &other) const = 0;
+    bool operator!=(const Expression &other) const
     {
-	m_values.insert(m_values.begin(), {value});
+	return !(*this == other);
     }
-
-    template<typename ...Args>
-    explicit Fact(B value, Args... rest) : Fact<A,B>(rest...)
-    {
-	m_values.insert(m_values.begin(), {value});
-    }
-
-    template<typename ...Args>
-    bool matches(Args... rest)
-    {
-	return _matches(0, rest...);
-    }
-
-    template<typename Missing, typename ...Args>
-    std::optional<Missing> deduce(len_t missingPos, Args... rest)
-    {
-	return _deduce<Missing>(missingPos, 0, rest...);
-    }
-private:
-    template<typename T, typename ...Args>
-    bool _matches(len_t pos, T value, Args... rest)
-    {
-        return (pos < m_values.size())
-	    && std::holds_alternative<T>(m_values[pos])
-	    && std::get<T>(m_values[pos]) == value
-	    && _matches(pos+1, rest...);
-    }
-    template<typename T>
-    bool _matches(len_t pos, T value)
-    {
-	return (pos < m_values.size())
-	    && std::holds_alternative<T>(m_values[pos])
-	    && std::get<T>(m_values[pos]) == value
-	    && pos == m_values.size()-1;
-    }
-
-    template<typename Missing, typename T, typename ...Args>
-    std::optional<Missing> _deduce(len_t missingPos, len_t pos, T value,
-				   Args... rest)
-    {
-	if(missingPos == pos && _matches(pos+1, value, rest...)
-	   && std::holds_alternative<Missing>(m_values[missingPos])) {
-	    return {std::get<Missing>(m_values[pos])};
-        } else if(pos < missingPos && (pos < m_values.size())
-		  && std::holds_alternative<T>(m_values[pos])
-		  && std::get<T>(m_values[pos]) == value) {
-	    return _deduce<Missing>(missingPos, pos+1, rest...);
-	} else {
-	    return {};
-	}
-    }
-    template<typename Missing, typename T>
-    std::optional<Missing> _deduce(len_t missingPos, len_t pos, T value)
-    {
-	if(missingPos == pos
-	   && _matches(pos+1, value)
-	   && std::holds_alternative<Missing>(m_values[missingPos])) {
-	    return {std::get<Missing>(m_values[pos])};
-	} else {
-	    return _deduce<Missing>(missingPos, pos+1);
-	}
-    }
-    template<typename Missing>
-    std::optional<Missing> _deduce(len_t missingPos, len_t pos)
-    {
-	if(missingPos == pos
-	   && std::holds_alternative<Missing>(m_values[missingPos])) {
-	    return {std::get<Missing>(m_values[pos])};
-	} else {
-	    return {};
-	}
-    }
+    virtual bool operator()(std::vector<Expression> &args) = 0;
+    virtual ~Expression() {}
 };
 
 
-template<typename A, typename B>
-class Rule {
+template<typename T>
+class Atom : public Expression {
 private:
-    using len_t = std::string::size_type;
-    std::vector<bool> m_args; // 1 means type A, 0 means type B
-    std::any m_func;
-    bool m_is_init = false;
+    T m_value;
+    bool m_is_filled = true;
 public:
-    template<typename ...Args>
-    void init(bool(*func)(Args...))
+    explicit Atom() : m_is_filled(false)  {}
+    explicit Atom(T value) : m_value(value)  {}
+    bool operator==(const Expression &other) const override
     {
-	(add_arg<Args>(), ...);
-	// All rules MUST be init-ed before use
-	// Can't use constructors because ...Args can't be inferred
-	// in the templated constructor of a template class
-	m_func = func;
-	m_is_init = true;
+	return typeid(other) == typeid(Atom<T>)
+	    && (((const Atom<T>&)other).m_value == m_value
+		|| ((const Atom<T>&)other).m_is_filled != m_is_filled);
     }
-
-    template<typename ...Args>
-    bool matches(Args... rest)
+    bool operator()(std::vector<Expression> &args) override
     {
-	if(m_is_init) {
-	    return _matches(0, rest...);
-	} else {
-	    throw std::runtime_error("Error: did not init Rule");
-	}
-    }
-
-    template<typename ...Args>
-    bool operator()(Args... inputs)
-    {
-	if(matches(inputs...)) {
-	    auto func(std::any_cast<bool(*)(Args...)>(m_func));
-	    return func(inputs...);
-	} else {
+	if(args.size() != 1 || typeid(args[0]) != typeid(Atom<T>&)
+	   || ((Atom<T>&)args[0]).m_is_filled == m_is_filled)
 	    return false;
-	}
-    }
-private:
-    template<typename T>
-    void add_arg()
-    {
-	static_assert(std::is_same<T, A>::value || std::is_same<T, B>::value,
-		      "Types within Rules must be of type A or type B");
-        constexpr bool type = std::is_same<T, A>::value;
-	m_args.push_back(type);
-    }
-
-    template<typename T, typename ...Args>
-    bool _matches(len_t pos, T, Args... rest)
-    {
-	static_assert(std::is_same<T, A>::value || std::is_same<T, B>::value,
-		      "Types within Rules must be of type A or type B");
-	constexpr bool type = std::is_same<T, A>::value;
-        return (pos < m_args.size())
-	    && m_args[pos] == type
-	    && _matches(pos+1, rest...);
-    }
-    template<typename T>
-    bool _matches(len_t pos, T)
-    {
-	static_assert(std::is_same<T, A>::value || std::is_same<T, B>::value,
-		      "Types within Rules must be of type A or type B");
-	constexpr bool type = std::is_same<T, A>::value;
-	return (pos < m_args.size())
-	    && m_args[pos] == type
-	    && pos == m_args.size()-1;
+	((Atom<T>&)args[0]).m_value = m_value;
+	return true;
     }
 };
 
 
-template<typename N, typename A, typename B>
-class Database {
-    static_assert(!std::is_same<N,A>::value, "Name type must differ from A type");
-    static_assert(!std::is_same<N,B>::value, "Name type must differ from B type");
-    static_assert(!std::is_convertible<A,B>::value,
-		  "A and B cannot be implicitly convertible");
-    using len_t = std::string::size_type;
+class Fact : public Expression {
 private:
-    std::unordered_map<N,std::vector<Fact<A,B>*>> m_facts;
-    std::unordered_map<N,std::vector<Rule<A,B>*>> m_rules;
-
-    Fact<A,B>* getCandidates(unsigned int index, const N truthName)
-    {
-	if(m_facts.find(truthName) == m_facts.end()
-	   || index >= m_facts[truthName].size()) {
-	    // If key doesn't exist, fact can't be found
-	    return nullptr;
-	}
-	return m_facts[truthName][index];
-    }
-    Rule<A,B>* getRuleCandidates(unsigned int index, const N ruleName)
-    {
-	if(m_rules.find(ruleName) == m_rules.end()
-	   || index >= m_rules[ruleName].size()) {
-	    // If key doesn't exist, fact can't be found
-	    return nullptr;
-	}
-	return m_facts[ruleName][index];
-    }
+    std::vector<Expression*> m_parts;
 public:
-    ~Database()
+    explicit Fact(std::initializer_list<Expression*> parts)
+	: m_parts(parts)
+    {}
+    bool operator==(const Expression &other) const override
     {
-	for(auto &pair : m_facts) {
-	    for(auto *truth : pair.second) {
-		delete truth;
-	    }
-	}
-	for(auto &pair : m_rules) {
-	    for(auto *rule : pair.second) {
-		delete rule;
-	    }
-	}
+	return typeid(other) == typeid(Fact)
+	    && ((const Fact&)other).m_parts == m_parts;
     }
-
-    void add(const N factName, Fact<A,B> *fact)
+    bool operator()(std::vector<Expression> &args) override
     {
-	m_facts[factName].push_back(fact);
-    }
-
-    /*void add(const N ruleName, Rule<A,B> *pred)
-    {
-	m_facts[ruleName].push_back(pred);
-	}*/
-
-    template<typename ...Args>
-    bool operator()(const N truthName, Args... rest)
-    {
-	Fact<A,B> *fact = nullptr;
-	unsigned int index = 0;
-	while((fact = getCandidates(index, truthName)) != nullptr) {
-	    if(fact->matches(rest...)) {
-		return true;
-	    }
-	    ++index;
-	}
+	if(args.size() != m_parts.size())
+	    return false;
+        
 	return false;
     }
+};
 
-    template<typename T, typename ...Args>
-    std::optional<T> deduce(const N truthName, len_t pos, Args... rest)
+
+class Rule : public Expression {
+private:
+    std::vector<Expression*> m_args;
+    std::vector<Expression*> m_predicates;
+public:
+    explicit Rule(std::initializer_list<Expression*> args) : m_args(args)
+    {}
+    bool operator==(const Expression &other) const override
     {
-	static_assert(std::is_same<T,A>::value || std::is_same<T,B>::value,
-		      "Type being deduced must be same as type A or B");
-	Fact<A,B> *fact = nullptr;
-	unsigned int index = 0;
-	std::optional<T> result;
-	while((fact = getCandidates(index, truthName)) != nullptr) {
-	    result = fact->template deduce<T>(pos, rest...);
-	    if(result.has_value()) {
-		return result;
-	    }
-	    ++index;
+	return typeid(other) == typeid(Rule)
+	    && ((const Rule&)other).m_args == m_args
+	    && ((const Rule&)other).m_predicates == m_predicates;
+    }
+    bool operator()(std::vector<Expression> &args) override
+    {
+	if(args.size() != m_args.size())
+	    return false;
+        
+	return false;
+    }
+    /*Define the series of Facts making up this Rule*/
+    Rule& operator<<(Fact *part)
+    {
+	m_predicates.push_back((Expression*)part);
+	return *this;
+    }
+};
+
+
+template<typename T>
+class Database {
+private:
+    std::map<T,std::vector<Expression*>> m_expressions;
+public:
+    void add(T name, Fact *new_fact)
+    {
+	m_expressions[name].push_back((Expression*)new_fact);
+    }
+    void add(T name, Rule *new_rule)
+    {
+	m_expressions[name].push_back((Rule*)new_rule);
+    }
+    bool query(T name, Expression *question)
+    {
+	if(m_expressions.find(name) == m_expressions.end()) {
+	    return false;
 	}
-	return result;
+	return true;
     }
 };
 #endif

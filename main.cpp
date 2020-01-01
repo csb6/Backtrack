@@ -1,65 +1,98 @@
-/*TODO
-[ ] Add some sort of logging mechanism so I can see which Fact/Rules are
-    considered and rejected, along with each of these overloads' type signatures
-[ ] Add support for some sort of lombda function for Rules so that arbitrary C++
-    code can be run as part of the program
-[ ] Add support for Rules within the Database, maybe in a separate collection
-    from facts or maybe in the same collection, using std::variant
-[ ] Add support for basic backtracking between Facts and Rules
-*/
 #include "backtrack.hpp"
 #include <iostream>
-#include <cstdint> // for std::int_least16_t
-
-enum class FactName : std::int_least16_t {
-    Orbits, InSolarSystem, Truth
-};
-
-enum class Planet {
-    Mercury, Venus, Earth, Mars
-};
-
-enum class Star {
-    AlphaCentauri, Sun
-};
+#include <string>
 
 int main()
 {
-    Database<FactName, Planet, Star> db;
+    {
+	Atom<int> a(0);
+	Atom<int> b(0);
+	Expression *a2 = &a;
+	Expression *b2 = &b;
+	assert(*a2 == *b2);
+    }
 
-    Fact<int,const char*> a(2, "hey bro", 5, 6, "9");
-    std::cout << "Fact matches? " << a.matches(2, "hey bro", 5, 6, "9") << '\n';
+    {
+	Atom<int> a(0);
+	Atom<long> b(0);
+	Expression *a2 = &a;
+	Expression *b2 = &b;
+	assert(*a2 != *b2);
+    }
 
-    //Initial Facts
-    db.add(FactName::Orbits, new Fact<Planet,Star>(Planet::Mercury, Star::Sun));
-    db.add(FactName::Orbits, new Fact<Planet,Star>(Planet::Venus, Star::Sun));
-    db.add(FactName::Orbits, new Fact<Planet,Star>(Planet::Earth, Star::Sun));
-    db.add(FactName::Orbits, new Fact<Planet,Star>(Star::Sun, Planet::Earth));
-    db.add(FactName::Orbits, new Fact<Planet,Star>(Star::Sun));
-    db.add(FactName::InSolarSystem,
-	   new Fact<Planet,Star>(Planet::Venus, Planet::Mercury, Planet::Mars,
-				 Planet::Earth));
+    {
+	Atom<int> a(0);
+	Atom<int> b(1);
+	Expression *a2 = &a;
+	Expression *b2 = &b;
+	assert(*a2 != *b2);
+    }
 
+    {
+	Atom<int> a(0);
+	Atom<int> b(1);
+	Fact f{&a, &b};
+	Fact f2{&a, &b};
+	assert(f == f2);
+    }
 
-    std::cout << db(FactName::Orbits, Planet::Earth, Star::Sun) << '\n';
-    std::cout << db(FactName::Truth, Planet::Mercury, Star::Sun) << '\n';
-    std::cout << db(FactName::Orbits, Planet::Venus, Star::AlphaCentauri)
-	      << '\n';
-    std::cout << db(FactName::Orbits, Star::Sun, Planet::Earth) << '\n';
-    std::cout << db(FactName::InSolarSystem, Planet::Venus,
-			   Planet::Mercury, Planet::Mars, Planet::Earth) << '\n';
-    std::cout << db(FactName::Orbits, Star::Sun) << '\n';
-    //Right now, only works with deducing arg of types within a Fact
-    auto solution = db.deduce<Planet>(FactName::Orbits, 0, Star::Sun);
-    std::cout << "Solution: " << (int)solution.value() << '\n';
-    auto solution2 = db.deduce<Star>(FactName::Orbits, 1, Planet::Venus);
-    std::cout << "Solution: " << (int)solution2.value() << '\n';
+    {
+	Atom<int> a(0);
+	Atom<int> b(1);
+	Fact f{&a, &b};
+	Fact f2{&b, &a};
+	assert(f != f2);
+    }
 
-    Rule<Planet, Star> rule1;
-    rule1.init(*[](Planet a, Planet b) {
-		    return a < b;
-		});
-    std::cout << rule1(Planet::Mars, Planet::Earth) << '\n';
+    {
+	Atom<int> a;
+	Atom<int> b;
+	Atom<int> c(0);
+	Atom<int> d(56);
+	Fact f{&c, &d};
+	
+	Rule r{&a, &b};
+	r << &f << &f;
+	Rule r2{&a, &b};
+	r2 << &f << &f;
+	assert(r == r2);
+    }
+
+    {
+	Atom<int> a;
+	Atom<int> b;
+	Atom<int> c(0);
+	Atom<int> d(56);
+	Fact f{&c, &d};
+	
+	Rule r{&a, &b};
+	r << &f << &f;
+	Rule r2{&a};
+	r2 << &f << &f;
+	assert(r != r2);
+    }
+
+    {
+	Atom<int> a;
+	Atom<int> b;
+	Atom<int> c(0);
+	Atom<int> d(56);
+	Fact f{&c, &d};
+	
+	Rule r{&a, &b};
+	r << &f << &f;
+	Rule r2{&a, &b};
+	r2 << &f;
+	assert(r != r2);
+    }
+
+    {
+	Database<std::string> db;
+	Atom joe("joe");
+	Atom jeff("jeff");
+	Fact f{&joe, &jeff};
+	db.add("parent", &f);
+    }
 
     return 0;
 }

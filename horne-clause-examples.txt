@@ -88,18 +88,27 @@ How to solve?
 		-B(3) is known as true, so !B(3) is false. Continue.
 	6. Therefore, W(3) must be true to satisfy the rule. Print true out to the user.
 
-How to implement simple operations (1-4) in C++?
 
-    Database db;
-
-    db.add(N ruleName, int predicateCount, ...)
-
-Ex:
-    Database<std::string,int,int> db;
-    db.add("B", 2, functionPtrForF, functionPtrForG);
-
-Need to figure out:
-    [X] How to define facts with 1 or 3+ arguments (right now, requires 2)
-    [X] How to define facts with varying arg types (right now, requires (A a, B b))
-    [X] How to define rules in terms of rules already in db
-    [X] How to define rules in terms of facts already in db
+Implementation in C++:
+-Atom<T> is a template class. It contains a value of type T. All atom classes are subclasses
+of a pure virtual Expression class, which has an operator==(const Expression &other) that allows
+two Atoms to determine if they can be unified. The types of each are compared, and if they
+differ, then the unification fails. Else, if the types match but both have different values, the
+unification fails. If the types match, and one Expression has an unfilled value and the other has
+a concrete value, then unification can occur. The unfilled expression takes the value of the other
+expression.
+-Fact<T,...> is a template class, which also inherits from Expression. It contains several atoms,
+which can all be the same or different types. It can only be unified if the other Expression is
+also a Fact, if all types match in the correct order, and if all filled values in both Facts match.
+If this is the case, then any unfilled Atoms can be filled in with the concrete values of the other
+Fact.
+-Rule<T,...> is a template class, which also inherits from Expression. It contains several unfilled
+Atoms, which are its parameters, and it also contains one or more Expressions. These Expressions are
+unified one at a time using some combination of the parameters; if one fails, the program backtracks
+to the caller of this Rule; if all succeed, it returns a success up the call stack.
+-The user poses a query to the program, which is in the form of a fact or a rule. They may provide
+some filled and some unfilled parameters to their query. The program first tries to find an Expression
+in the database (whether a Fact or Rule) that can unify with the query. If it cannot, the program ends.
+If it can, it returns true. Whether or not an Expression can unify is a recursive backtracking process;
+the program works in a depth-first search, trying to unify at each step until the bottom of the "tree"
+of Facts and Rules required to satisfy the query is found.
