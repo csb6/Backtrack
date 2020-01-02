@@ -103,5 +103,13 @@ int main()
 	    std::cout << "false\n";
     }
 
+    {
+	auto *a1 = new Atom<int>(1);
+	auto *b1 = new Atom<int>(2);
+	auto *c1 = new Atom<int>(3);
+	Database<std::string> db;
+	db.add_fact("add", {a1, b1, c1});
+    }
+
     return 0;
 }

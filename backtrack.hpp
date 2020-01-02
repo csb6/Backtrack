@@ -17,10 +17,10 @@
 #include <map>
 #include <vector>
 #include <typeinfo>
-#include <any>
 #include <utility>
 #include <initializer_list>
 
+// An object that can be potentially unified with another object
 class Expression {
 public:
     // `==` means "Can this expression unify with another?"
@@ -39,7 +39,7 @@ public:
     virtual ~Expression() {}
 };
 
-
+// A primitive value; wraps a C++ type and contains a single value
 template<typename T>
 class Atom : public Expression {
 private:
@@ -96,7 +96,7 @@ void restore_unfilled(const std::vector<std::size_t> &positions,
     }
 }
 
-
+// An ordered grouping of Atoms that expresses a relation between them
 class Fact : public Expression {
 private:
     std::vector<Expression*> m_parts;
@@ -104,6 +104,7 @@ public:
     explicit Fact(std::initializer_list<Expression*> parts)
 	: m_parts(parts)
     {}
+
     bool operator==(const Expression &o) const override
     {
 	auto &other = (const Fact&)o;
@@ -114,7 +115,7 @@ public:
     {
 	if(args.size() != m_parts.size())
 	    return false;
-	
+
 	std::vector<std::size_t> unfilled = unfilled_positions(args);
         for(std::size_t i = 0; i < m_parts.size(); ++i) {
 	    std::vector<Expression*> arg{args[i]};
@@ -131,7 +132,8 @@ public:
     void set_filled(bool) override {}
 };
 
-
+// A generalized Fact that can show relations between one or more Facts
+// given arbitrary input arguments
 class Rule : public Expression {
 private:
     std::vector<Expression*> m_args;
@@ -149,7 +151,7 @@ public:
     {
 	if(args.size() != m_args.size())
 	    return false;
-        
+
 	return false;
     }
     /*Define the series of Facts making up this Rule*/
@@ -158,30 +160,57 @@ public:
 	m_predicates.push_back((Expression*)part);
 	return *this;
     }
+    Rule& operator<<(Rule *part)
+    {
+	m_predicates.push_back((Expression*)part);
+	return *this;
+    }
     bool is_filled() const override { return true; }
     void set_filled(bool) override {}
 };
 
-
+// Contains a group of named expressions; can be queried
 template<typename T>
 class Database {
 private:
     std::map<T,std::vector<Expression*>> m_expressions;
+    std::vector<Expression*> m_atoms;
 public:
-    void add(T name, Fact *new_fact)
+    ~Database()
     {
-	m_expressions[name].push_back((Expression*)new_fact);
+	for(auto &[key, list] : m_expressions) {
+	    for(auto *expr : list) {
+		delete expr;
+	    }
+	}
+	for(auto *atom : m_atoms) {
+	    delete atom;
+	}
     }
-    void add(T name, Rule *new_rule)
+    Fact& add_fact(T name, std::initializer_list<Expression*> args)
     {
-	m_expressions[name].push_back((Rule*)new_rule);
+	for(auto *arg : args) {
+	    if(typeid(arg) != typeid(Fact*)) {
+		// If it's not a Fact, it's probably an Atom<T>
+		m_atoms.push_back(arg);
+	    }
+	}
+	auto *new_fact = new Fact{args};
+	m_expressions[name].push_back(new_fact);
+	return *new_fact;
     }
-    bool query(T name, Expression *question)
+    Rule& add_rule(T name, std::initializer_list<Expression*> args)
+    {
+	auto *new_rule = new Rule{args};
+	m_expressions[name].push_back(new_rule);
+	return *new_rule;
+    }
+    /*bool query(T name, Expression *question)
     {
 	if(m_expressions.find(name) == m_expressions.end()) {
 	    return false;
 	}
 	return true;
-    }
+	}*/
 };
 #endif
