@@ -1,90 +1,111 @@
 #include "catch.hpp"
 #include "backtrack.hpp"
 
-enum class FactName {
-    A, B, C, D
-};
-
-TEST_CASE("Fact matching tests") {
-    Database<FactName,int,const char*> db;
-    db.add(FactName::C, new Fact<int,const char*>(7));
-    db.add(FactName::D, new Fact<int,const char*>("yoyoyo"));
-    db.add(FactName::A, new Fact<int,const char*>(1, "Hey there"));
-    db.add(FactName::A, new Fact<int,const char*>(1, "Boo yeah!"));
-    db.add(FactName::A, new Fact<int,const char*>(2, "Hey there!"));
-    db.add(FactName::B, new Fact<int,const char*>("hey", "how", "are", "you", 78,
-						  "doing", 89, 67, "my", "number",
-						  8, "amigo", 45, 67, "", 8));
-
-    SECTION("Correct Match") {
-	REQUIRE(db(FactName::A, 1, "Hey there"));
-	REQUIRE(db(FactName::A, 1, "Boo yeah!"));
-	REQUIRE(db(FactName::A, 2, "Hey there!"));
-	REQUIRE(db(FactName::B,"hey", "how", "are", "you", 78, "doing", 89, 67,
-			  "my", "number", 8, "amigo", 45, 67, "", 8));
-	REQUIRE(db(FactName::C, 7));
-	REQUIRE(db(FactName::D, "yoyoyo"));
+TEST_CASE("Equality checks") {
+    SECTION("Atom<int>(0) == Atom<int>(0)") {
+	Atom<int> a(0);
+	Atom<int> b(0);
+	Expression *a2 = &a;
+	Expression *b2 = &b;
+        REQUIRE(*a2 == *b2);
     }
 
-    SECTION("Mismatches") {
-	REQUIRE(!db(FactName::A, 1));
-	REQUIRE(!db(FactName::A, "Boo yeah!"));
-	REQUIRE(!db(FactName::B, 1, "Hey there"));
-	REQUIRE(!db(FactName::B,"hey", "how", "are", "you", 78, "doing", 89, 67,
-			   "my", "number", 8, "amigo", 45, 67, ""));
-	REQUIRE(!db(FactName::B,"hey", "how", "are", "you", 78, "doing", 89, 67,
-			   "my", "number", 8, "amigo", 45, 67, 8));
-	REQUIRE(!db(FactName::B, "how", "are", "you", 78, "doing", 89, 67,
-			   "my", "number", 8, "amigo", 45, 67, "", 8));
-	REQUIRE(!db(FactName::A, "hey"));
-	REQUIRE(!db(FactName::C, 1));
-	REQUIRE(!db(FactName::D, "yoyoy"));
+    SECTION("Atom<int>(0) != Atom<long>(0)") {
+	Atom<int> a(0);
+	Atom<long> b(0);
+	Expression *a2 = &a;
+	Expression *b2 = &b;
+        REQUIRE(*a2 != *b2);
+    }
+
+    SECTION("Atom<int>, different values") {
+	Atom<int> a(0);
+	Atom<int> b(1);
+	Expression *a2 = &a;
+	Expression *b2 = &b;
+        REQUIRE(*a2 != *b2);
+    }
+
+    SECTION("Fact identity check") {
+	Atom<int> a(0);
+	Atom<int> b(1);
+	Fact f({&a, &b});
+	Fact f2({&a, &b});
+	REQUIRE(f == f2);
+    }
+
+    SECTION("Two different Facts") {
+	Atom<int> a(0);
+	Atom<int> b(1);
+	Fact f({&a, &b});
+	Fact f2({&b, &a});
+        REQUIRE(f != f2);
+    }
+
+    SECTION("Rule equality") {
+	Atom<int> a;
+	Atom<int> b;
+	Atom<int> c(0);
+	Atom<int> d(56);
+	Fact f({&c, &d});
+
+	Rule r{&a, &b};
+	r << &f << &f;
+	Rule r2{&a, &b};
+	r2 << &f << &f;
+        REQUIRE(r == r2);
+    }
+
+    SECTION("Rule inequality") {
+	Atom<int> a;
+	Atom<int> b;
+	Atom<int> c(0);
+	Atom<int> d(56);
+	Fact f({&c, &d});
+
+	Rule r{&a, &b};
+	r << &f << &f;
+	Rule r2{&a};
+	r2 << &f << &f;
+        REQUIRE(r != r2);
+    }
+
+    SECTION("Rule equality, different arities") {
+	Atom<int> a;
+	Atom<int> b;
+	Atom<int> c(0);
+	Atom<int> d(56);
+	Fact f({&c, &d});
+
+	Rule r{&a, &b};
+	r << &f << &f;
+	Rule r2{&a, &b};
+	r2 << &f;
+        REQUIRE(r != r2);
+    }
+
+    SECTION("Fact takes input") {
+	Atom<int> a(1);
+	Atom<int> b;
+	Atom<int> c(3);
+
+	Atom<int> a1(1);
+	Atom<int> b1(2);
+	Atom<int> c1(3);
+	Fact add({&a1, &b1, &c1});
+	std::vector<Expression*> input{&a, &b, &c};
+        add(input);
+	REQUIRE(b.is_filled());
+	REQUIRE(b.value() == 2);
     }
 }
 
-TEST_CASE("Deducing Type A Tests") {
-    Database<FactName,int,const char*> db;
-    db.add(FactName::C, new Fact<int,const char*>(7));
-    db.add(FactName::D, new Fact<int,const char*>("yoyoyo"));
-    db.add(FactName::A, new Fact<int,const char*>(1, "Hey there"));
-    db.add(FactName::A, new Fact<int,const char*>(1, "Boo yeah!"));
-    db.add(FactName::A, new Fact<int,const char*>(2, "Hey there!"));
-    db.add(FactName::B, new Fact<int,const char*>("hey", "how", "are", "you", 78,
-						  "doing", 89, 67, "my", "number",
-						  8, "amigo", 45, 67, "", 8));
 
-    SECTION("AB, deduce A at index 0") {
-	auto val = db.deduce<int>(FactName::A, 0, "Hey there");
-	REQUIRE(val.has_value());
-	REQUIRE(val == 1);
-	REQUIRE(!db.deduce<int>(FactName::A, 0, ""));
-    }
-
-    SECTION("BBBBABAABBABAABA, deduce A") {
-	auto val = db.deduce<int>(FactName::B, 4, "hey", "how", "are", "you", "doing", 89, 67,
-			      "my", "number", 8, "amigo", 45, 67, "", 8);
-	REQUIRE(val.has_value());
-	REQUIRE(val == 78);
-	REQUIRE(!db.deduce<int>(FactName::B, 4, "hey", "how", "are", "you", "doing", 89, 67,
-			    "my", "number", 8, "amigo", 45, 67, "", 9).has_value());
-	REQUIRE(!db.deduce<int>(FactName::B, 4, "hey", "how", "are", "you", "doing", 89, 67,
-			    "my", "number", 8, "amigo", 45, 67, "").has_value());
-	REQUIRE(!db.deduce<int>(FactName::B, 4, "hey", "how", "are", "you", "doing").has_value());
-    }
-}
-
-TEST_CASE("Deducing Type B Tests") {
-    Database<FactName,int,const char*> db;
-    db.add(FactName::A, new Fact<int,const char*>(65, 89, "yoyoyo", "", "", 8, 9, " "));
-    db.add(FactName::A, new Fact<int,const char*>(65, 89, "yoyoyo", "", "", 8, 9, ""));
-    db.add(FactName::B, new Fact<int,const char*>(98, 7));
-
-    SECTION("AABBBAAB, deduce at index 2") {
-	auto val = db.deduce<const char*>(FactName::A, 2, 65, 89, "", "", 8, 9, " ");
-	REQUIRE(val.has_value());
-	REQUIRE(val == "yoyoyo");
-	REQUIRE(!db.deduce<const char*>(FactName::A, 2, 65, 89, "", "", 8, 9));
-	REQUIRE(!db.deduce<const char*>(FactName::A, 2, 65, 89, "", "", 8, 9, "nope"));
-	REQUIRE(!db.deduce<const char*>(FactName::B, 2, 65, 89, "", "", 8, 9, " "));
+TEST_CASE("Database checks") {
+    SECTION("Construct facts using database") {
+	Database<std::string> db;
+	Fact &f1 = db.add_fact("add", 1, 2, 3);
+	Fact &f2 = db.add_fact("add", Variable<int>(), 2, Variable<int>());
+        REQUIRE(f1 == f2);
     }
 }
