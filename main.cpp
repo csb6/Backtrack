@@ -31,16 +31,16 @@ int main()
     {
 	Atom<int> a(0);
 	Atom<int> b(1);
-	Fact f{&a, &b};
-	Fact f2{&a, &b};
+	Fact f({&a, &b});
+	Fact f2({&a, &b});
 	assert(f == f2);
     }
 
     {
 	Atom<int> a(0);
 	Atom<int> b(1);
-	Fact f{&a, &b};
-	Fact f2{&b, &a};
+	Fact f({&a, &b});
+	Fact f2({&b, &a});
 	assert(f != f2);
     }
 
@@ -49,8 +49,8 @@ int main()
 	Atom<int> b;
 	Atom<int> c(0);
 	Atom<int> d(56);
-	Fact f{&c, &d};
-	
+	Fact f({&c, &d});
+
 	Rule r{&a, &b};
 	r << &f << &f;
 	Rule r2{&a, &b};
@@ -63,8 +63,8 @@ int main()
 	Atom<int> b;
 	Atom<int> c(0);
 	Atom<int> d(56);
-	Fact f{&c, &d};
-	
+	Fact f({&c, &d});
+
 	Rule r{&a, &b};
 	r << &f << &f;
 	Rule r2{&a};
@@ -77,8 +77,8 @@ int main()
 	Atom<int> b;
 	Atom<int> c(0);
 	Atom<int> d(56);
-	Fact f{&c, &d};
-	
+	Fact f({&c, &d});
+
 	Rule r{&a, &b};
 	r << &f << &f;
 	Rule r2{&a, &b};
@@ -94,7 +94,7 @@ int main()
 	Atom<int> a1(1);
 	Atom<int> b1(2);
 	Atom<int> c1(3);
-	Fact add{&a1, &b1, &c1};
+	Fact add({&a1, &b1, &c1});
 	std::vector<Expression*> input{&a, &b, &c};
         add(input);
 	if(b.is_filled())
@@ -104,11 +104,10 @@ int main()
     }
 
     {
-	auto *a1 = new Atom<int>(1);
-	auto *b1 = new Atom<int>(2);
-	auto *c1 = new Atom<int>(3);
 	Database<std::string> db;
-	db.add_fact("add", {a1, b1, c1});
+	Fact &f1 = db.add_fact("add", 1, 2, 3);
+	Fact &f2 = db.add_fact("add", Variable<int>(), 2, Variable<int>());
+	assert(f1 == f2);
     }
 
     return 0;

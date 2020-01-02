@@ -39,19 +39,23 @@ public:
     virtual ~Expression() {}
 };
 
+// A placeholder representing an Atom<T> object with no value yet
+template<typename T>
+struct Variable {};
+
 // A primitive value; wraps a C++ type and contains a single value
 template<typename T>
 class Atom : public Expression {
 private:
     T m_value;
-    bool m_is_filled = true;
+    bool m_is_filled;
 public:
-    explicit Atom() : m_is_filled(false)  {}
-    explicit Atom(T value) : m_value(value)  {}
+    explicit Atom() : m_is_filled(false) {}
+    explicit Atom(T value) : m_value(value), m_is_filled(true) {}
     bool operator==(const Expression &o) const override
     {
 	auto &other = (const Atom<T>&)o;
-	return typeid(other) == typeid(Atom<T>)
+	return typeid(o) == typeid(Atom<T>&)
 	    && (other.m_value == m_value
 		|| other.m_is_filled != m_is_filled);
     }
@@ -101,15 +105,22 @@ class Fact : public Expression {
 private:
     std::vector<Expression*> m_parts;
 public:
-    explicit Fact(std::initializer_list<Expression*> parts)
+    explicit Fact(std::vector<Expression*> parts)
 	: m_parts(parts)
     {}
 
     bool operator==(const Expression &o) const override
     {
+	if(typeid(o) != typeid(Fact))
+	    return false;
 	auto &other = (const Fact&)o;
-	return typeid(other) == typeid(Fact)
-	    && other.m_parts == m_parts;
+	if(other.m_parts.size() != m_parts.size())
+	    return false;
+	for(std::size_t i = 0; i < m_parts.size(); ++i) {
+	    if(*(m_parts[i]) != *(other.m_parts[i]))
+		return false;
+	}
+	return true;
     }
     bool operator()(std::vector<Expression*> &args) override
     {
@@ -175,6 +186,21 @@ class Database {
 private:
     std::map<T,std::vector<Expression*>> m_expressions;
     std::vector<Expression*> m_atoms;
+    template<typename U>
+    void add_atom(U atom, std::vector<Expression*> &so_far)
+    {
+	auto *new_atom = new Atom<U>(atom);
+	// User enters a C++ value of type U
+	m_atoms.push_back(new_atom);
+	so_far.push_back(new_atom);
+    }
+    template<typename U>
+    void add_atom(Variable<U>, std::vector<Expression*> &so_far)
+    {
+	auto *new_atom = new Atom<U>;
+	m_atoms.push_back(new_atom);
+	so_far.push_back(new_atom);
+    }
 public:
     ~Database()
     {
@@ -187,24 +213,22 @@ public:
 	    delete atom;
 	}
     }
-    Fact& add_fact(T name, std::initializer_list<Expression*> args)
+    template<typename ...Args>
+    Fact& add_fact(T name, Args... atoms)
     {
-	for(auto *arg : args) {
-	    if(typeid(arg) != typeid(Fact*)) {
-		// If it's not a Fact, it's probably an Atom<T>
-		m_atoms.push_back(arg);
-	    }
-	}
-	auto *new_fact = new Fact{args};
+	std::vector<Expression*> atoms_so_far;
+	(add_atom(atoms, atoms_so_far), ...);
+
+	auto *new_fact = new Fact(atoms_so_far);
 	m_expressions[name].push_back(new_fact);
 	return *new_fact;
     }
-    Rule& add_rule(T name, std::initializer_list<Expression*> args)
+    /*Rule& add_rule(T name, std::initializer_list<Expression*> args)
     {
 	auto *new_rule = new Rule{args};
 	m_expressions[name].push_back(new_rule);
 	return *new_rule;
-    }
+	}*/
     /*bool query(T name, Expression *question)
     {
 	if(m_expressions.find(name) == m_expressions.end()) {
