@@ -49,9 +49,9 @@ TEST_CASE("Equality checks") {
 	Atom<int> d(56);
 	Fact f({&c, &d});
 
-	Rule r{&a, &b};
+	Rule r({&a, &b});
 	r << &f << &f;
-	Rule r2{&a, &b};
+	Rule r2({&a, &b});
 	r2 << &f << &f;
         REQUIRE(r == r2);
     }
@@ -63,9 +63,9 @@ TEST_CASE("Equality checks") {
 	Atom<int> d(56);
 	Fact f({&c, &d});
 
-	Rule r{&a, &b};
+	Rule r({&a, &b});
 	r << &f << &f;
-	Rule r2{&a};
+	Rule r2({&a});
 	r2 << &f << &f;
         REQUIRE(r != r2);
     }
@@ -77,9 +77,9 @@ TEST_CASE("Equality checks") {
 	Atom<int> d(56);
 	Fact f({&c, &d});
 
-	Rule r{&a, &b};
+	Rule r({&a, &b});
 	r << &f << &f;
-	Rule r2{&a, &b};
+	Rule r2({&a, &b});
 	r2 << &f;
         REQUIRE(r != r2);
     }
@@ -95,7 +95,7 @@ TEST_CASE("Equality checks") {
 	Fact add({&a1, &b1, &c1});
 	std::vector<Expression*> input{&a, &b, &c};
         add(input);
-	REQUIRE(b.is_filled());
+	REQUIRE(b.is_unified());
 	REQUIRE(b.value() == 2);
     }
 }
@@ -107,5 +107,19 @@ TEST_CASE("Database checks") {
 	Fact &f1 = db.add_fact("add", 1, 2, 3);
 	Fact &f2 = db.add_fact("add", Variable<int>(), 2, Variable<int>());
         REQUIRE(f1 == f2);
+    }
+
+    SECTION("get()") {
+	Database<std::string> db;
+	db.add_fact("moon", "deimos", "mars");
+	Expression *fact = db.get("moon", 2);
+	REQUIRE(fact->arity() == 2);
+    }
+
+    SECTION("get() failure, correct name, wrong arity") {
+	Database<std::string> db;
+	db.add_fact("moon", "deimos", "mars");
+	Expression *fact = db.get("moon", 1);
+	REQUIRE(fact == nullptr);
     }
 }

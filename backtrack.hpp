@@ -18,7 +18,7 @@
 #include <vector>
 #include <typeinfo>
 #include <utility>
-#include <initializer_list>
+#include <algorithm>
 
 // An object that can be potentially unified with another object
 class Expression {
@@ -33,9 +33,10 @@ public:
     // that you can; if you can't accept these args, return false
     virtual bool operator()(std::vector<Expression*> &args) = 0;
     // Has this Expression been unified yet?
-    virtual bool is_filled() const = 0;
+    virtual bool is_unified() const = 0;
     // Change unification status of this Expression
-    virtual void set_filled(bool val) = 0;
+    virtual void set_unified(bool val) = 0;
+    virtual std::size_t arity() const = 0;
     virtual ~Expression() {}
 };
 
@@ -48,16 +49,16 @@ template<typename T>
 class Atom : public Expression {
 private:
     T m_value;
-    bool m_is_filled;
+    bool m_is_unified;
 public:
-    explicit Atom() : m_is_filled(false) {}
-    explicit Atom(T value) : m_value(value), m_is_filled(true) {}
+    explicit Atom() : m_is_unified(false) {}
+    explicit Atom(T value) : m_value(value), m_is_unified(true) {}
     bool operator==(const Expression &o) const override
     {
 	auto &other = (const Atom<T>&)o;
 	return typeid(o) == typeid(Atom<T>&)
 	    && (other.m_value == m_value
-		|| other.m_is_filled != m_is_filled);
+		|| other.m_is_unified != m_is_unified);
     }
     bool operator()(std::vector<Expression*> &args) override
     {
@@ -65,38 +66,39 @@ public:
 	if(args.size() != 1 || typeid(arg_ref) != typeid(Atom<T>&))
 	    return false;
 	auto *arg = (Atom<T>*)args[0];
-	if(!arg->m_is_filled) {
+	if(!arg->m_is_unified) {
 	    // If arg hasn't been unified, unify it with this object's value
 	    arg->m_value = m_value;
-	    arg->set_filled(true);
+	    arg->set_unified(true);
 	    return true;
 	} else {
 	    return arg->m_value == m_value;
 	}
     }
-    bool is_filled() const override { return m_is_filled; }
-    void set_filled(bool val) override { m_is_filled = val; }
+    bool is_unified() const override { return m_is_unified; }
+    void set_unified(bool val) override { m_is_unified = val; }
     T value() const { return m_value; }
+    std::size_t arity() const override { return 1; }
 };
 
 
-std::vector<std::size_t> unfilled_positions(const std::vector<Expression*> &args)
+std::vector<std::size_t> ununified_positions(const std::vector<Expression*> &args)
 {
     std::size_t i = 0;
     std::vector<std::size_t> positions;
     for(const auto *each : args) {
-        if(!each->is_filled())
+        if(!each->is_unified())
 	    positions.push_back(i);
 	++i;
     }
     return positions;
 }
 
-void restore_unfilled(const std::vector<std::size_t> &positions,
+void restore_ununified(const std::vector<std::size_t> &positions,
 		      std::vector<Expression*> &args)
 {
     for(auto pos : positions) {
-	args[pos]->set_filled(false);
+	args[pos]->set_unified(false);
     }
 }
 
@@ -116,6 +118,7 @@ public:
 	auto &other = (const Fact&)o;
 	if(other.m_parts.size() != m_parts.size())
 	    return false;
+
 	for(std::size_t i = 0; i < m_parts.size(); ++i) {
 	    if(*(m_parts[i]) != *(other.m_parts[i]))
 		return false;
@@ -127,20 +130,21 @@ public:
 	if(args.size() != m_parts.size())
 	    return false;
 
-	std::vector<std::size_t> unfilled = unfilled_positions(args);
+	std::vector<std::size_t> ununified = ununified_positions(args);
         for(std::size_t i = 0; i < m_parts.size(); ++i) {
 	    std::vector<Expression*> arg{args[i]};
 	    if(!(*m_parts[i])(arg)) {
 		// Undo any unifications done by the Expressions in
 		// m_parts
-		restore_unfilled(unfilled, args);
+		restore_ununified(ununified, args);
 		return false;
 	    }
 	}
 	return true;
     }
-    bool is_filled() const override { return true; }
-    void set_filled(bool) override {}
+    bool is_unified() const override { return true; }
+    void set_unified(bool) override {}
+    std::size_t arity() const override { return m_parts.size(); }
 };
 
 // A generalized Fact that can show relations between one or more Facts
@@ -150,7 +154,7 @@ private:
     std::vector<Expression*> m_args;
     std::vector<Expression*> m_predicates;
 public:
-    explicit Rule(std::initializer_list<Expression*> args) : m_args(args)
+    explicit Rule(std::vector<Expression*> args) : m_args(args)
     {}
     bool operator==(const Expression &other) const override
     {
@@ -176,8 +180,9 @@ public:
 	m_predicates.push_back((Expression*)part);
 	return *this;
     }
-    bool is_filled() const override { return true; }
-    void set_filled(bool) override {}
+    bool is_unified() const override { return true; }
+    void set_unified(bool) override {}
+    std::size_t arity() const override { return m_args.size(); }
 };
 
 // Contains a group of named expressions; can be queried
@@ -223,12 +228,20 @@ public:
 	m_expressions[name].push_back(new_fact);
 	return *new_fact;
     }
-    /*Rule& add_rule(T name, std::initializer_list<Expression*> args)
+    Expression* get(T name, std::size_t arity)
     {
-	auto *new_rule = new Rule{args};
-	m_expressions[name].push_back(new_rule);
-	return *new_rule;
-	}*/
+	if(m_expressions.find(name) == m_expressions.end())
+	    return nullptr;
+	auto match = std::find_if(m_expressions[name].begin(),
+				  m_expressions[name].end(),
+				  [arity](const auto *expr) {
+				      return expr->arity() == arity;
+				  });
+	if(match == m_expressions[name].end())
+	    return nullptr;
+	else
+	    return *match;
+    }
     /*bool query(T name, Expression *question)
     {
 	if(m_expressions.find(name) == m_expressions.end()) {
