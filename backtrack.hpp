@@ -29,9 +29,9 @@ public:
     {
 	return !(*this == other);
     }
-    // This operator means: try to unify any of these arguments
+    // Try to unify any of these arguments
     // that you can; if you can't accept these args, return false
-    virtual bool operator()(std::vector<Expression*> &args) = 0;
+    virtual bool unify(std::vector<Expression*> &args) = 0;
     // Change Expression back to its original state 
     virtual void reset() = 0;
     // Has this Expression been unified yet?
@@ -68,7 +68,7 @@ public:
 	    && (other.m_value == m_value
 		|| other.m_is_unified != m_is_unified);
     }
-    bool operator()(std::vector<Expression*> &args) override
+    bool unify(std::vector<Expression*> &args) override
     {
 	auto &arg_ref{*args[0]};
 	if(args.size() != 1 || typeid(arg_ref) != typeid(Atom<T>&))
@@ -127,7 +127,7 @@ public:
 	}
 	return true;
     }
-    bool operator()(std::vector<Expression*> &args) override
+    bool unify(std::vector<Expression*> &args) override
     {
 	if(args.size() != m_args.size())
 	    return false;
@@ -135,26 +135,27 @@ public:
 	// First, try to unify the arguments with the parameters
         for(std::size_t i = 0; i < m_args.size(); ++i) {
 	    std::vector<Expression*> arg{args[i]};
-	    if(!(*m_args[i])(arg)) {
+	    if(!m_args[i]->unify(arg)) {
 		// Undo any unifications done by the Expressions in
 		// m_args
 	        reset();
 		return false;
 	    }
 	}
+	// TODO: try to unify the arguments with the predicates' arguments
 	return true;
     }
     Expression* operator[](std::size_t index)
     {
 	return m_args[index];
     }
-    /*Define the series of Expressions making up this Rule*/
-    Rule& operator<<(Expression *part)
+    /*Define the series of Rules making up this Rule's body*/
+    Rule& operator<<(Rule &part)
     {
-	m_predicates.push_back(part);
+	m_predicates.push_back(&part);
 	return *this;
     }
-    Rule& operator,(Expression *part)
+    Rule& operator,(Rule &part)
     {
 	return (*this << part);
     }

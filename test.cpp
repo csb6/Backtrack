@@ -50,9 +50,9 @@ TEST_CASE("Equality checks") {
 	Rule f({&c, &d});
 
 	Rule r({&a, &b});
-	r << &f << &f;
+	r << f, f;
 	Rule r2({&a, &b});
-	r2 << &f << &f;
+	r2 << f, f;
         REQUIRE(r == r2);
     }
 
@@ -64,9 +64,9 @@ TEST_CASE("Equality checks") {
 	Rule f({&c, &d});
 
 	Rule r({&a, &b});
-	r << &f << &f;
+	r << f, f;
 	Rule r2({&a});
-	r2 << &f << &f;
+	r2 << f, f;
         REQUIRE(r != r2);
     }
 
@@ -78,9 +78,9 @@ TEST_CASE("Equality checks") {
 	Rule f({&c, &d});
 
 	Rule r({&a, &b});
-	r << &f << &f;
+	r << f, f;
 	Rule r2({&a, &b});
-	r2 << &f;
+	r2 << f;
         REQUIRE(r != r2);
     }
 
@@ -94,7 +94,7 @@ TEST_CASE("Equality checks") {
 	Atom<int> c1(3);
 	Rule add({&a1, &b1, &c1});
 	std::vector<Expression*> input{&a, &b, &c};
-        add(input);
+        add.unify(input);
 	REQUIRE(b.is_unified());
 	REQUIRE(b.value() == 2);
     }
