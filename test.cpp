@@ -29,16 +29,16 @@ TEST_CASE("Equality checks") {
     SECTION("Fact identity check") {
 	Atom<int> a(0);
 	Atom<int> b(1);
-	Fact f({&a, &b});
-	Fact f2({&a, &b});
+	Rule f({&a, &b});
+	Rule f2({&a, &b});
 	REQUIRE(f == f2);
     }
 
     SECTION("Two different Facts") {
 	Atom<int> a(0);
 	Atom<int> b(1);
-	Fact f({&a, &b});
-	Fact f2({&b, &a});
+	Rule f({&a, &b});
+	Rule f2({&b, &a});
         REQUIRE(f != f2);
     }
 
@@ -47,7 +47,7 @@ TEST_CASE("Equality checks") {
 	Atom<int> b;
 	Atom<int> c(0);
 	Atom<int> d(56);
-	Fact f({&c, &d});
+	Rule f({&c, &d});
 
 	Rule r({&a, &b});
 	r << &f << &f;
@@ -61,7 +61,7 @@ TEST_CASE("Equality checks") {
 	Atom<int> b;
 	Atom<int> c(0);
 	Atom<int> d(56);
-	Fact f({&c, &d});
+	Rule f({&c, &d});
 
 	Rule r({&a, &b});
 	r << &f << &f;
@@ -75,7 +75,7 @@ TEST_CASE("Equality checks") {
 	Atom<int> b;
 	Atom<int> c(0);
 	Atom<int> d(56);
-	Fact f({&c, &d});
+	Rule f({&c, &d});
 
 	Rule r({&a, &b});
 	r << &f << &f;
@@ -92,7 +92,7 @@ TEST_CASE("Equality checks") {
 	Atom<int> a1(1);
 	Atom<int> b1(2);
 	Atom<int> c1(3);
-	Fact add({&a1, &b1, &c1});
+	Rule add({&a1, &b1, &c1});
 	std::vector<Expression*> input{&a, &b, &c};
         add(input);
 	REQUIRE(b.is_unified());
@@ -104,21 +104,21 @@ TEST_CASE("Equality checks") {
 TEST_CASE("Database checks") {
     SECTION("Construct facts using database") {
 	Database<std::string> db;
-	Fact &f1 = db.add_fact("add", 1, 2, 3);
-	Fact &f2 = db.add_fact("add", Variable<int>(), 2, Variable<int>());
+	Rule &f1 = db.add("add", 1, 2, 3);
+	Rule &f2 = db.add("add", Variable<int>(), 2, Variable<int>());
         REQUIRE(f1 == f2);
     }
 
     SECTION("get()") {
 	Database<std::string> db;
-	db.add_fact("moon", "deimos", "mars");
+	db.add("moon", "deimos", "mars");
 	Expression *fact = db.get("moon", 2);
 	REQUIRE(fact->arity() == 2);
     }
 
     SECTION("get() failure, correct name, wrong arity") {
 	Database<std::string> db;
-	db.add_fact("moon", "deimos", "mars");
+	db.add("moon", "deimos", "mars");
 	Expression *fact = db.get("moon", 1);
 	REQUIRE(fact == nullptr);
     }

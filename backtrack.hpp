@@ -32,27 +32,35 @@ public:
     // This operator means: try to unify any of these arguments
     // that you can; if you can't accept these args, return false
     virtual bool operator()(std::vector<Expression*> &args) = 0;
+    // Change Expression back to its original state 
+    virtual void reset() = 0;
     // Has this Expression been unified yet?
     virtual bool is_unified() const = 0;
     // Change unification status of this Expression
     virtual void set_unified(bool val) = 0;
+    // Number of arguments that can be given
     virtual std::size_t arity() const = 0;
     virtual ~Expression() {}
 };
+
 
 // A placeholder representing an Atom<T> object with no value yet
 template<typename T>
 struct Variable {};
 
+
 // A primitive value; wraps a C++ type and contains a single value
 template<typename T>
 class Atom : public Expression {
 private:
+    T m_orig_value;
     T m_value;
     bool m_is_unified;
 public:
-    explicit Atom() : m_is_unified(false) {}
-    explicit Atom(T value) : m_value(value), m_is_unified(true) {}
+    Atom() : m_is_unified(false) {}
+    explicit Atom(T value)
+	: m_orig_value(value), m_value(value), m_is_unified(true)
+    {}
     bool operator==(const Expression &o) const override
     {
 	auto &other = (const Atom<T>&)o;
@@ -75,77 +83,19 @@ public:
 	    return arg->m_value == m_value;
 	}
     }
+    void reset() override
+    {
+	if(m_is_unified && m_value != m_orig_value) {
+	    m_value = m_orig_value;
+	    set_unified(false);
+	}
+    }
     bool is_unified() const override { return m_is_unified; }
     void set_unified(bool val) override { m_is_unified = val; }
     T value() const { return m_value; }
     std::size_t arity() const override { return 1; }
 };
 
-
-std::vector<std::size_t> ununified_positions(const std::vector<Expression*> &args)
-{
-    std::size_t i = 0;
-    std::vector<std::size_t> positions;
-    for(const auto *each : args) {
-        if(!each->is_unified())
-	    positions.push_back(i);
-	++i;
-    }
-    return positions;
-}
-
-void restore_ununified(const std::vector<std::size_t> &positions,
-		      std::vector<Expression*> &args)
-{
-    for(auto pos : positions) {
-	args[pos]->set_unified(false);
-    }
-}
-
-// An ordered grouping of Atoms that expresses a relation between them
-class Fact : public Expression {
-private:
-    std::vector<Expression*> m_parts;
-public:
-    explicit Fact(std::vector<Expression*> parts)
-	: m_parts(parts)
-    {}
-
-    bool operator==(const Expression &o) const override
-    {
-	if(typeid(o) != typeid(Fact))
-	    return false;
-	auto &other = (const Fact&)o;
-	if(other.m_parts.size() != m_parts.size())
-	    return false;
-
-	for(std::size_t i = 0; i < m_parts.size(); ++i) {
-	    if(*(m_parts[i]) != *(other.m_parts[i]))
-		return false;
-	}
-	return true;
-    }
-    bool operator()(std::vector<Expression*> &args) override
-    {
-	if(args.size() != m_parts.size())
-	    return false;
-
-	std::vector<std::size_t> ununified = ununified_positions(args);
-        for(std::size_t i = 0; i < m_parts.size(); ++i) {
-	    std::vector<Expression*> arg{args[i]};
-	    if(!(*m_parts[i])(arg)) {
-		// Undo any unifications done by the Expressions in
-		// m_parts
-		restore_ununified(ununified, args);
-		return false;
-	    }
-	}
-	return true;
-    }
-    bool is_unified() const override { return true; }
-    void set_unified(bool) override {}
-    std::size_t arity() const override { return m_parts.size(); }
-};
 
 // A generalized Fact that can show relations between one or more Facts
 // given arbitrary input arguments
@@ -156,18 +106,43 @@ private:
 public:
     explicit Rule(std::vector<Expression*> args) : m_args(args)
     {}
-    bool operator==(const Expression &other) const override
+    bool operator==(const Expression &o) const override
     {
-	return typeid(other) == typeid(Rule)
-	    && ((const Rule&)other).m_args == m_args
-	    && ((const Rule&)other).m_predicates == m_predicates;
+	if(typeid(o) != typeid(Rule))
+	    return false;
+	auto &other = (const Rule&)o;
+	if(other.m_args.size() != m_args.size()
+	   || other.m_predicates.size() != m_predicates.size())
+	    return false;
+
+	// Check if arguments can unify
+	for(std::size_t i = 0; i < m_args.size(); ++i) {
+	    if(*(m_args[i]) != *(other.m_args[i]))
+		return false;
+	}
+	// Check if predicates can unify
+	for(std::size_t i = 0; i < m_predicates.size(); ++i) {
+	    if(*(m_predicates[i]) != *(other.m_predicates[i]))
+		return false;
+	}
+	return true;
     }
     bool operator()(std::vector<Expression*> &args) override
     {
 	if(args.size() != m_args.size())
 	    return false;
 
-	return false;
+	// First, try to unify the arguments with the parameters
+        for(std::size_t i = 0; i < m_args.size(); ++i) {
+	    std::vector<Expression*> arg{args[i]};
+	    if(!(*m_args[i])(arg)) {
+		// Undo any unifications done by the Expressions in
+		// m_args
+	        reset();
+		return false;
+	    }
+	}
+	return true;
     }
     Expression* operator[](std::size_t index)
     {
@@ -176,17 +151,25 @@ public:
     /*Define the series of Expressions making up this Rule*/
     Rule& operator<<(Expression *part)
     {
-	m_predicates.push_back((Expression*)part);
+	m_predicates.push_back(part);
 	return *this;
     }
     Rule& operator,(Expression *part)
     {
 	return (*this << part);
     }
+    void reset() override
+    {
+	for(auto *arg : m_args)
+	    arg->reset();
+	for(auto *pred : m_predicates)
+	    pred->reset();
+    }
     bool is_unified() const override { return true; }
     void set_unified(bool) override {}
     std::size_t arity() const override { return m_args.size(); }
 };
+
 
 // Contains a group of named expressions; can be queried
 template<typename T>
@@ -194,24 +177,17 @@ class Database {
 private:
     std::map<T,std::vector<Expression*>> m_expressions;
     std::vector<Expression*> m_atoms;
+    void add_arg(Expression *expr, std::vector<Expression*> &so_far)
+    {
+	so_far.push_back(expr);
+    }
     template<typename U>
-    void add_atom(U atom, std::vector<Expression*> &so_far)
+    void add_arg(U atom, std::vector<Expression*> &so_far)
     {
 	auto *new_atom = new Atom<U>(atom);
 	// User enters a C++ value of type U
 	m_atoms.push_back(new_atom);
 	so_far.push_back(new_atom);
-    }
-    template<typename U>
-    void add_atom(Variable<U>, std::vector<Expression*> &so_far)
-    {
-	auto *new_atom = new Atom<U>;
-	m_atoms.push_back(new_atom);
-	so_far.push_back(new_atom);
-    }
-    void add_arg(Expression *expr, std::vector<Expression*> &so_far)
-    {
-	so_far.push_back(expr);
     }
     template<typename U>
     void add_arg(Variable<U>, std::vector<Expression*> &so_far)
@@ -233,17 +209,7 @@ public:
 	}
     }
     template<typename ...Args>
-    Fact& add_fact(T name, Args... atoms)
-    {
-	std::vector<Expression*> atoms_so_far;
-	(add_atom(atoms, atoms_so_far), ...);
-
-	auto *new_fact = new Fact(atoms_so_far);
-	m_expressions[name].push_back(new_fact);
-	return *new_fact;
-    }
-    template<typename ...Args>
-    Rule& add_rule(T name, Args... args)
+    Rule& add(T name, Args... args)
     {
 	std::vector<Expression*> args_so_far;
 	(add_arg(args, args_so_far), ...);
