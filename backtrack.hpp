@@ -169,16 +169,19 @@ public:
 
 	return false;
     }
-    /*Define the series of Facts making up this Rule*/
-    Rule& operator<<(Fact *part)
+    Expression* operator[](std::size_t index)
+    {
+	return m_args[index];
+    }
+    /*Define the series of Expressions making up this Rule*/
+    Rule& operator<<(Expression *part)
     {
 	m_predicates.push_back((Expression*)part);
 	return *this;
     }
-    Rule& operator<<(Rule *part)
+    Rule& operator,(Expression *part)
     {
-	m_predicates.push_back((Expression*)part);
-	return *this;
+	return (*this << part);
     }
     bool is_unified() const override { return true; }
     void set_unified(bool) override {}
@@ -206,6 +209,17 @@ private:
 	m_atoms.push_back(new_atom);
 	so_far.push_back(new_atom);
     }
+    void add_arg(Expression *expr, std::vector<Expression*> &so_far)
+    {
+	so_far.push_back(expr);
+    }
+    template<typename U>
+    void add_arg(Variable<U>, std::vector<Expression*> &so_far)
+    {
+	auto *new_atom = new Atom<U>;
+	m_atoms.push_back(new_atom);
+	so_far.push_back(new_atom);
+    }
 public:
     ~Database()
     {
@@ -227,6 +241,15 @@ public:
 	auto *new_fact = new Fact(atoms_so_far);
 	m_expressions[name].push_back(new_fact);
 	return *new_fact;
+    }
+    template<typename ...Args>
+    Rule& add_rule(T name, Args... args)
+    {
+	std::vector<Expression*> args_so_far;
+	(add_arg(args, args_so_far), ...);
+	auto *new_rule = new Rule(args_so_far);
+	m_expressions[name].push_back(new_rule);
+	return *new_rule;
     }
     Expression* get(T name, std::size_t arity)
     {
