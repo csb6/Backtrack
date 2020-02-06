@@ -48,7 +48,7 @@
           Rules themselves
       [ ] How to unify Variables without mutating them
       [ ] How to help the user figure out what failed to unify and why
-      [ ] How to wire-up params with predicates of the Rules (maybe use lambdas?)
+      [X] How to wire-up params with predicates of the Rules (maybe use lambdas?)
 */
 #include <vector>
 #include <map>
@@ -177,22 +177,17 @@ public:
 
 class Rule : public RuleVariable {
 private:
-    std::vector<const RuleVariable*> m_predicates;
+    std::vector<RuleVariable> m_predicates;
 public:
-    template<typename ...ParamIndices>
-    Rule(std::string name, const RuleVariable &owner, ParamIndices... indices)
-        : RuleVariable(name, (owner[indices], ...))
-    {
-        
-    }
+    using RuleVariable::RuleVariable;
     
     bool can_unify(const Rule &) const { return false; }
 
     const auto& predicates() const { return m_predicates; }
 
-    auto& operator<<(const RuleVariable &predicate)
+    auto& operator<<(RuleVariable &&predicate)
     {
-	m_predicates.push_back(&predicate);
+	m_predicates.push_back(std::move(predicate));
 	return *this;
     }
 };
@@ -221,26 +216,28 @@ public:
     {
 	m_rules[new_rule.name()].push_back(&new_rule);
     }
-
-    //const Rule& find(std::string name)
-
-    template<typename ...Args>
-    bool query(std::string rule_name, Args... args)
+    
+    bool query(const RuleVariable &conjecture)
     {
-	if(m_rules.count(rule_name) < 1)
+	if(m_rules.count(conjecture.name()) < 1)
 	    return false;
-	RuleVariable theorem(rule_name, args...);
-	const auto &rule_vec = m_rules[rule_name];
+	const auto &rule_vec = m_rules[conjecture.name()];
 	for(const auto *rule : rule_vec) {
-	    if(theorem.can_unify(*rule)) {
-	        for(const auto *each : rule->predicates()) {
-                    if(!query(each->name()))
+	    if(conjecture.can_unify(*rule)) {
+	        for(const auto &each : rule->predicates()) {
+                    if(!query(each))
                         return false;
                 }
                 return true;
 	    }
 	}
 	return false;
+    }
+
+    template<typename ...Args>
+    bool query(std::string name, Args... args)
+    {
+        return query(RuleVariable{name, args...});
     }
 };
 #endif

@@ -39,12 +39,15 @@ int main()
     {
         Database db;
 
-        Rule a{Type<int>(), Type<int>(), 2};
-        //Rule b{Type<int>(), 5};
-        //Rule c{5, 6};
-        //db.add_rule(a);
-        //db.add_rule(b);
-        //db.add_rule(c);
+        Rule a{"a", Type<int>(), Type<int>(), 2};
+        a << RuleVariable{"b", 2, 2};
+
+        Rule b{"b", 2, 2};
+        db.add_rule(a);
+        db.add_rule(b);
+        std::cout << db.query(RuleVariable{"a", 45453, -890, 2}) << '\n';
+        std::cout << db.query("a", 45453, -890, "oiii") << '\n';
+        std::cout << db.query("a", 45453) << '\n';
     }
     return 0;
 }
