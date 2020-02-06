@@ -2,242 +2,245 @@
 #define BACKTRACK_LIB_H
 /* Author: Cole Blakley
    File: backtrack.hpp
-   Purpose: The program is a sort of Prolog within C++. You create a Database
-     with three type parameters: The type for the names of facts and
-     rules (usually an enum class or string), and two other types, A and
-     B, representing the two types of data that can be logically-related within
-     facts/rules. To get started, instantiate a Database<> with
-     these 3 types, in order, parameterized in the type.
 
-     Facts are in form `Fact<A,B>(arg0, arg1, ..., argn)`, where arg0 through
-     argn are of type A and/or type B. Facts represent a concrete association
-     between 2 or more values. To add a Fact to a Database instance, use
-     `db.add(factName, new Fact<A,B>(arg0, arg1, ..., argn))`.
+   Here is what I need to do:
+   - I need to have the concept of Variables
+     [X] Variables can hold any type, but only one type at a time
+     [X] Variables can be compared with any other Variable
+     [X] Variables can lack a value (and they usually will) or they can
+         hold a value, but not both
+     [ ] Variables that lack a value can contain restrictions on what their
+         value can be (TODO: technically true, but need to make this usable)
+     [ ] Two Variables are equal if they hold the same type, if their value-
+         holding status is the same, and, if they both hold a value, that those
+	 values are equivalent. If they both don't hold a value, they are equal
+	 if both of their restraints are equal.
+     [X] Two Variables can be unified if they hold the same type and if either: (1)
+         Variable A isn't holding a value, Variable B is, and Variable B's value
+	 fits the constraints of Variable A, or (2) Variable A
+	 is holding a value and it's equivalent to the value held by Variable B
+	 (but not both (1) and (2))
+     [ ] The backtracking works by starting with the root Rule chosen based on the
+         user query and recursively trying to unify the arguments given to each Rule
+	 with the appropriate parameters of the predicates for each Rule until all
+	 predicates for the root Rule have been proven true
+   - I need to have the concept of Rules
+     [X] Rules have parameters, which are inputs
+       [X] Parameters are not bound to any particular thing, but instead
+           contain a type and sometimes restrictions of the value they can unify with
+     [ ] Rules have predicates, which are a list of names representing other Rules
+         and the arguments to be passed to those Rules when the appropriate overload
+	 is found. All of its predicates must be true for the Rule to be true.
+   - I need to have the concept of a database
+     [ ] Databases contain Rules can contain Rules with the same name as long
+         as each overload takes different arguments (difference = type and/or
+	 has/doesn't have a value and/or what that value is).
+     [ ] The Rules present within the Database are accessible and callable from all
+         of the Rules themselves.
+     [ ] The user enters the name and args for a Rule, and the database tries to
+         find a Rule that matches them; if one can be found, it tries to prove its
+	 predicates are all true. If they fail, repeat step 1 (try to find Rule)
+	 until no more unexplored overloads. This is a recursive process for
+	 each of each Rule's predicates.
+
+    - Problems:
+      [ ] How to track the state of the backtracking process without mutating the
+          Rules themselves
+      [ ] How to unify Variables without mutating them
+      [ ] How to help the user figure out what failed to unify and why
+      [ ] How to wire-up params with predicates of the Rules (maybe use lambdas?)
 */
-#include <map>
 #include <vector>
-#include <typeinfo>
-#include <utility>
-#include <algorithm>
+#include <map>
+#include <memory>
+#include <string>
+#include <type_traits>
 
-// An object that can be potentially unified with another object
-class Expression {
+class IVariable {
 public:
-    // `==` means "Can this expression unify with another?"
-    virtual bool operator==(const Expression &o) const = 0;
-    bool operator!=(const Expression &other) const
-    {
-	return !(*this == other);
-    }
-    // Try to unify any of these arguments
-    // that you can; if you can't accept these args, return false
-    virtual bool unify(std::vector<Expression*> &args) = 0;
-    // Change Expression back to its original state 
-    virtual void reset() = 0;
-    // Has this Expression been unified yet?
-    virtual bool is_unified() const = 0;
-    // Change unification status of this Expression
-    virtual void set_unified(bool val) = 0;
-    // Number of arguments that can be given
-    virtual std::size_t arity() const = 0;
-    virtual ~Expression() {}
+    virtual bool can_unify(const IVariable &o) const = 0;
+    virtual ~IVariable() {}
 };
 
-
-// A placeholder representing an Atom<T> object with no value yet
 template<typename T>
-struct Variable {};
-
-
-// A primitive value; wraps a C++ type and contains a single value
-template<typename T>
-class Atom : public Expression {
-private:
-    T m_orig_value;
-    T m_value;
-    bool m_is_unified;
+class Variable : public IVariable {
 public:
-    Atom() : m_is_unified(false) {}
-    explicit Atom(T value)
-	: m_orig_value(value), m_value(value), m_is_unified(true)
+    using Predicate = bool(*)(const T&);
+private:
+    T m_value;
+    bool m_has_value;
+    std::vector<Predicate> m_constraints;
+public:
+    Variable() : m_has_value(false) {}
+
+    Variable(T value) : m_value(value), m_has_value(true)
     {}
-    bool operator==(const Expression &o) const override
+
+    ~Variable() {}
+
+    virtual bool can_unify(const IVariable &o) const override
     {
-	auto &other = (const Atom<T>&)o;
-	return typeid(o) == typeid(Atom<T>&)
-	    && (other.m_value == m_value
-		|| other.m_is_unified != m_is_unified);
-    }
-    bool unify(std::vector<Expression*> &args) override
-    {
-	auto &arg_ref{*args[0]};
-	if(args.size() != 1 || typeid(arg_ref) != typeid(Atom<T>&))
+	if(typeid(*this) != typeid(o))
+	    // No way to unify if underlying types differ
 	    return false;
-	auto *arg = (Atom<T>*)args[0];
-	if(!arg->m_is_unified) {
-	    // If arg hasn't been unified, unify it with this object's value
-	    arg->m_value = m_value;
-	    arg->set_unified(true);
+	const auto &other = static_cast<const Variable<T>&>(o);
+
+	if(is_unified() && !other.is_unified()) {
+	    // This Variable has a value; can other accept that value?
+	    for(const auto &predicate : other.m_constraints) {
+		if(!predicate(m_value))
+		    return false;
+	    }
+	    return true;
+	} else if(!is_unified() && other.is_unified()) {
+	    // Other has a value; can this Variable accept that value?
+	    for(const auto &predicate : m_constraints) {
+		if(!predicate(other.m_value))
+		    return false;
+	    }
 	    return true;
 	} else {
-	    return arg->m_value == m_value;
+	    // If both have values, are they equivalent?
+	    return is_unified() && other.is_unified()
+		&& m_value == other.m_value;
 	}
+	return true;
     }
-    void reset() override
+
+    bool is_unified() const { return m_has_value; }
+
+    bool constrain(Predicate constraint)
     {
-	if(m_is_unified && m_value != m_orig_value) {
-	    m_value = m_orig_value;
-	    set_unified(false);
-	}
+	if(m_has_value)
+	    return false;
+	m_constraints.push_back(constraint);
+	return true;
     }
-    bool is_unified() const override { return m_is_unified; }
-    void set_unified(bool val) override { m_is_unified = val; }
-    T value() const { return m_value; }
-    std::size_t arity() const override { return 1; }
+
+    bool set_value(T new_value)
+    {
+	for(const auto &predicate : m_constraints) {
+	    if(!predicate(new_value))
+		return false;
+	}
+	m_value = new_value;
+	m_has_value = true;
+	return true;
+    }
 };
 
 
-// A generalized Fact that can show relations between one or more Facts
-// given arbitrary input arguments
-class Rule : public Expression {
+template<typename T>
+struct Type {};
+
+// Holds params, but no predicates
+class RuleVariable {
 private:
-    std::vector<Expression*> m_args;
-    std::vector<Expression*> m_predicates;
+    std::string m_name;
+    std::vector<std::unique_ptr<IVariable>> m_params;
+
+    template<typename T>
+    void add_param(Type<T>)
+    {
+	m_params.emplace_back(new Variable<T>());
+    }
+
+    template<typename T>
+    void add_param(T new_param)
+    {
+	m_params.emplace_back(new Variable<T>(new_param));
+    }
 public:
-    explicit Rule(std::vector<Expression*> args) : m_args(args)
-    {}
-    bool operator==(const Expression &o) const override
+    template<typename ...Params>
+    RuleVariable(std::string name, Params... params)
+	: m_name(name)
     {
-	if(typeid(o) != typeid(Rule))
-	    return false;
-	auto &other = (const Rule&)o;
-	if(other.m_args.size() != m_args.size()
-	   || other.m_predicates.size() != m_predicates.size())
-	    return false;
+	(add_param(params), ...);
+    }
 
-	// Check if arguments can unify
-	for(std::size_t i = 0; i < m_args.size(); ++i) {
-	    if(*(m_args[i]) != *(other.m_args[i]))
-		return false;
-	}
-	// Check if predicates can unify
-	for(std::size_t i = 0; i < m_predicates.size(); ++i) {
-	    if(*(m_predicates[i]) != *(other.m_predicates[i]))
-		return false;
-	}
-	return true;
-    }
-    bool unify(std::vector<Expression*> &args) override
-    {
-	if(args.size() != m_args.size())
-	    return false;
+    bool can_unify(const class Rule &other) const;
 
-	// First, try to unify the arguments with the parameters
-        for(std::size_t i = 0; i < m_args.size(); ++i) {
-	    std::vector<Expression*> arg{args[i]};
-	    if(!m_args[i]->unify(arg)) {
-		// Undo any unifications done by the Expressions in
-		// m_args
-	        reset();
-		return false;
-	    }
-	}
-	// TODO: try to unify the arguments with the predicates' arguments
-	return true;
-    }
-    Expression* operator[](std::size_t index)
+    const auto& name() const { return m_name; }
+
+    const IVariable* operator[](std::size_t index) const
     {
-	return m_args[index];
+        return m_params.at(index).get();
     }
-    /*Define the series of Rules making up this Rule's body*/
-    Rule& operator<<(Rule &part)
+
+    bool operator==(const RuleVariable &other) const
     {
-	m_predicates.push_back(&part);
+	// Note: checks for same addresses of params, not same values
+	return m_name == other.m_name && m_params == other.m_params;
+    }
+};
+
+
+class Rule : public RuleVariable {
+private:
+    std::vector<const RuleVariable*> m_predicates;
+public:
+    template<typename ...ParamIndices>
+    Rule(std::string name, const RuleVariable &owner, ParamIndices... indices)
+        : RuleVariable(name, (owner[indices], ...))
+    {
+        
+    }
+    
+    bool can_unify(const Rule &) const { return false; }
+
+    const auto& predicates() const { return m_predicates; }
+
+    auto& operator<<(const RuleVariable &predicate)
+    {
+	m_predicates.push_back(&predicate);
 	return *this;
     }
-    Rule& operator,(Rule &part)
-    {
-	return (*this << part);
-    }
-    void reset() override
-    {
-	for(auto *arg : m_args)
-	    arg->reset();
-	for(auto *pred : m_predicates)
-	    pred->reset();
-    }
-    bool is_unified() const override { return true; }
-    void set_unified(bool) override {}
-    std::size_t arity() const override { return m_args.size(); }
 };
 
 
-// Contains a group of named expressions; can be queried
-template<typename T>
-class Database {
-private:
-    std::map<T,std::vector<Expression*>> m_expressions;
-    std::vector<Expression*> m_atoms;
-    void add_arg(Expression *expr, std::vector<Expression*> &so_far)
-    {
-	so_far.push_back(expr);
+bool RuleVariable::can_unify(const Rule &other) const
+{
+    if(m_name != other.m_name || m_params.size() != other.m_params.size()) {
+	return false;
     }
-    template<typename U>
-    void add_arg(U atom, std::vector<Expression*> &so_far)
-    {
-	auto *new_atom = new Atom<U>(atom);
-	// User enters a C++ value of type U
-	m_atoms.push_back(new_atom);
-	so_far.push_back(new_atom);
-    }
-    template<typename U>
-    void add_arg(Variable<U>, std::vector<Expression*> &so_far)
-    {
-	auto *new_atom = new Atom<U>;
-	m_atoms.push_back(new_atom);
-	so_far.push_back(new_atom);
-    }
-public:
-    ~Database()
-    {
-	for(auto &[key, list] : m_expressions) {
-	    for(auto *expr : list) {
-		delete expr;
-	    }
-	}
-	for(auto *atom : m_atoms) {
-	    delete atom;
-	}
-    }
-    template<typename ...Args>
-    Rule& add(T name, Args... args)
-    {
-	std::vector<Expression*> args_so_far;
-	(add_arg(args, args_so_far), ...);
-	auto *new_rule = new Rule(args_so_far);
-	m_expressions[name].push_back(new_rule);
-	return *new_rule;
-    }
-    Expression* get(T name, std::size_t arity)
-    {
-	if(m_expressions.find(name) == m_expressions.end())
-	    return nullptr;
-	auto match = std::find_if(m_expressions[name].begin(),
-				  m_expressions[name].end(),
-				  [arity](const auto *expr) {
-				      return expr->arity() == arity;
-				  });
-	if(match == m_expressions[name].end())
-	    return nullptr;
-	else
-	    return *match;
-    }
-    /*bool query(T name, Expression *question)
-    {
-	if(m_expressions.find(name) == m_expressions.end()) {
+
+    for(std::size_t i = 0; i < m_params.size(); ++i) {
+	if(!m_params[i]->can_unify(*(other.m_params[i]))) {
 	    return false;
 	}
-	return true;
-	}*/
+    }
+    return true;
+}
+
+
+class Database {
+private:
+    std::map<std::string, std::vector<Rule*>> m_rules;
+public:
+    void add_rule(Rule &new_rule)
+    {
+	m_rules[new_rule.name()].push_back(&new_rule);
+    }
+
+    //const Rule& find(std::string name)
+
+    template<typename ...Args>
+    bool query(std::string rule_name, Args... args)
+    {
+	if(m_rules.count(rule_name) < 1)
+	    return false;
+	RuleVariable theorem(rule_name, args...);
+	const auto &rule_vec = m_rules[rule_name];
+	for(const auto *rule : rule_vec) {
+	    if(theorem.can_unify(*rule)) {
+	        for(const auto *each : rule->predicates()) {
+                    if(!query(each->name()))
+                        return false;
+                }
+                return true;
+	    }
+	}
+	return false;
+    }
 };
 #endif
